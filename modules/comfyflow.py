@@ -2,20 +2,31 @@ from typing import Any
 import random
 import json
 import copy
-from PIL import Image
+from PIL import Image, ImageChops
 from loguru import logger
 import queue
 
 import streamlit as st
 from streamlit_extras.row import row
 from modules.page import custom_text_area
+from streamlit_drawable_canvas import st_canvas
+import numpy as np
+import io
 
+class ImageFile:
+    def __init__(self, name, byte_array, mime_type):
+        self.name = name
+        self.byte_array = byte_array
+        self.mime_type = mime_type  
 class Comfyflow:
     def __init__(self, comfy_client, api_data, app_data) -> Any:
     
         self.comfy_client = comfy_client
         self.api_json = json.loads(api_data)
         self.app_json = json.loads(app_data)
+
+    
+  
 
     def generate(self):
         prompt = copy.deepcopy(self.api_json)
@@ -72,7 +83,9 @@ class Comfyflow:
                         param_key = f"{node_id}_{param_name}"
                         if param_key in st.session_state:
                             param_value = st.session_state[param_key]
-                            
+                            param_key_masked=f"{param_key}_masked"
+                            if param_key_masked  in st.session_state:
+                                param_value = st.session_state[param_key_masked]
                             logger.info(f"update param {param_key} {param_name} {param_value}")
                             if param_value is not None:
                                 prompt[node_id]["inputs"][param_item] = param_value.name
@@ -84,7 +97,6 @@ class Comfyflow:
                         param_key = f"{node_id}_{param_name}"
                         if param_key in st.session_state:
                             param_value = st.session_state[param_key]
-                            
                             logger.info(f"update param {param_key} {param_name} {param_value}")
                             if param_value is not None:
                                 prompt[node_id]["inputs"][param_item] = param_value.name
@@ -133,7 +145,6 @@ class Comfyflow:
                 logger.info(f"Got gifs from server, {node_id}, {len(gifs_output)}")
                 return format, gifs_output
         
-
     def create_ui_input(self, node_id, node_inputs):
         def random_seed(param_key):
             random_value = random.randint(0, 0x7fffffffffffffff)
@@ -194,15 +205,101 @@ class Comfyflow:
                 param_key = f"{node_id}_{param_name}"
                 uploaded_file = st.file_uploader(param_name, help=param_help, key=param_key, type=['png', 'jpg', 'jpeg'], accept_multiple_files=False)
                 if uploaded_file is not None:
-                    logger.info(f"uploading image, {uploaded_file}")
-                    # upload to server
+                   
+                    draw_track_image_key = f'draw_track_image_{param_key}'
                     upload_type = "input"
-                    imagefile = {'image': (uploaded_file.name, uploaded_file)}  # 替换为要上传的文件名和路径
-                    self.comfy_client.upload_image(imagefile, param_subfolder, upload_type, 'true')
+                    caption="Upoaded Image"
+                    if draw_track_image_key in st.session_state:
+                        image = st.session_state[draw_track_image_key]
+                        caption = "Edited Image"
+                    else:
+                        logger.info(f"uploading image, {uploaded_file}")
+                        # upload to server
+                        imagefile = {'image': (uploaded_file.name, uploaded_file)}  # 替换为要上传的文件名和路径
+                        self.comfy_client.upload_image(imagefile, param_subfolder, upload_type, 'true')
+                     
+                        image = Image.open(uploaded_file)
+                        max_width = 375  # Standard phone width
+                        aspect_ratio = image.height / image.width
+                        # Calculate new dimensions
+                        if image.width > max_width:
+                            new_width = max_width
+                            new_height = int(new_width * aspect_ratio)
+                        else:
+                            new_width = image.width
+                            new_height = image.height
+                        image = image.resize((new_width, new_height))
 
-                    # show image preview
-                    image = Image.open(uploaded_file)
-                    st.image(image, use_column_width=True, caption='Input Image')
+                   
+                        
+                    # Use a dynamic key for session state
+                    expander_key = f'draw_track_expanded_{param_key}'
+                   
+                    # Initialize session state for the expander
+                    if expander_key not in st.session_state:
+                        st.session_state[expander_key] = False
+                   
+                    # Button to toggle
+                    if st.button("Edit",f'draw_track{param_key}'):
+                        st.session_state[expander_key] = not st.session_state[expander_key]
+
+                    # Use the session state to control the expander
+                    if st.session_state[expander_key]:
+                        with st.expander("Edit Dialog", expanded=True):
+                            stroke_width = st.slider("Adjust Stroke Width", min_value=1, max_value=10, value=5, step=1)
+                            canvas_result = st_canvas(
+                                fill_color="rgba(255, 165, 0, 0.3)",  # Fixed fill color with some opacity
+                                stroke_width=stroke_width,
+                                stroke_color="black",
+                                background_image=image,
+                                update_streamlit=True,
+                                height=new_height,
+                                width=new_width,
+                                drawing_mode="freedraw",
+                                key="canvas",
+                            )
+                            if st.button("Save"):
+                                if canvas_result.image_data is not None and not np.all((canvas_result.image_data == 0)):
+                                    # Convert the canvas result to an image
+                                    mask_image = Image.fromarray(canvas_result.image_data.astype('uint8'), 'RGBA')
+                                    # Convert the resized image to RGBA if it is not
+                                    if image.mode != 'RGBA':
+                                        image = image.convert('RGBA')
+
+                                    # Extract the alpha channel from the mask image
+                                    mask_alpha = mask_image.split()[3]
+                                    mask_alpha = Image.eval(mask_alpha, lambda a: 255 - a)
+
+                                    # Extract the existing alpha channel from the image
+                                    image_alpha = image.split()[3]
+
+                                    # Create a new alpha channel by combining the existing alpha with the mask's alpha
+                                    combined_alpha = ImageChops.multiply(image_alpha, mask_alpha)
+
+                                    # Combine the new alpha channel with the original image
+                                    image.putalpha(combined_alpha)
+
+                                    # Convert the modified image to a byte stream
+                                    image_byte_array = io.BytesIO()
+                                    image.save(image_byte_array, format='PNG')  # Save the image in PNG format to preserve transparency
+                                    image_byte_array.seek(0)  # Move the cursor to the start of the stream
+
+                                    # Create a file-like object for uploading
+                                    name = f'{uploaded_file.name}_masked.png'
+                                    
+                                    imagefile_upload = {'image': (name, image_byte_array, 'image/png')}
+                                    imagefile_cache = ImageFile(name, image_byte_array, 'image/png')
+                                    
+
+                                    # Upload the modified image
+                                    self.comfy_client.upload_image(imagefile_upload, param_subfolder, upload_type, 'true')
+                                    st.session_state[f"{param_key}_masked"] = imagefile_cache
+
+                                    st.session_state[draw_track_image_key] = image
+                                    st.session_state[expander_key]=False
+                                    st.experimental_rerun()
+                    else:
+                         st.image(image, use_column_width=True, caption=caption)
             elif param_type == 'UPLOADVIDEO':
                 param_name = param_node['name']
                 param_help = param_node['help']
@@ -301,4 +398,3 @@ class Comfyflow:
                     output_image = Image.open('./public/images/output-none.png')
                     logger.info("default output")
                     img_placeholder.image(output_image, use_column_width=True, caption='None Image, Generate it!')
-                                
