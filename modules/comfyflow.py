@@ -203,14 +203,22 @@ class Comfyflow:
                 param_help = param_node['help']
                 param_subfolder = param_node.get('subfolder', '')
                 param_key = f"{node_id}_{param_name}"
-                uploaded_file = st.file_uploader(param_name, help=param_help, key=param_key, type=['png', 'jpg', 'jpeg'], accept_multiple_files=False)
+                work_image_key = f'{param_key}_work_image'
+                def file_uploader_on_change():
+                    if work_image_key in st.session_state:
+                        del st.session_state[work_image_key]
+                uploaded_file = st.file_uploader(param_name, 
+                                                 help=param_help, 
+                                                 key=param_key, 
+                                                 type=['png', 'jpg', 'jpeg'], 
+                                                 accept_multiple_files=False,
+                                                 on_change=file_uploader_on_change
+                                                 )
                 if uploaded_file is not None:
-                   
-                    draw_track_image_key = f'draw_track_image_{param_key}'
                     upload_type = "input"
                     caption="Upoaded Image"
-                    if draw_track_image_key in st.session_state:
-                        image = st.session_state[draw_track_image_key]
+                    if work_image_key in st.session_state:
+                        image = st.session_state[work_image_key]
                         caption = "Edited Image"
                     else:
                         logger.info(f"uploading image, {uploaded_file}")
@@ -230,36 +238,27 @@ class Comfyflow:
                             new_height = image.height
                         image = image.resize((new_width, new_height))
 
-                   
-                        
-                    # Use a dynamic key for session state
-                    expander_key = f'draw_track_expanded_{param_key}'
-                   
-                    # Initialize session state for the expander
-                    if expander_key not in st.session_state:
-                        st.session_state[expander_key] = False
-                   
-                    # Button to toggle
-                    if st.button("Edit",f'draw_track{param_key}'):
-                        st.session_state[expander_key] = not st.session_state[expander_key]
+                    toggle_edit_key=f"{param_key}_toggle_edit"
+                    if toggle_edit_key not in st.session_state:
+                        st.session_state[toggle_edit_key] = False
 
-                    # Use the session state to control the expander
-                    if st.session_state[expander_key]:
-                        with st.expander("Edit Dialog", expanded=True):
-                            stroke_width = st.slider("Adjust Stroke Width", min_value=1, max_value=10, value=5, step=1)
-                            canvas_result = st_canvas(
-                                fill_color="rgba(255, 165, 0, 0.3)",  # Fixed fill color with some opacity
-                                stroke_width=stroke_width,
-                                stroke_color="black",
-                                background_image=image,
-                                update_streamlit=True,
-                                height=image.height,
-                                width=image.width,
-                                drawing_mode="freedraw",
-                                key="canvas",
-                            )
-                            if st.button("Save"):
-                                if canvas_result.image_data is not None and not np.all((canvas_result.image_data == 0)):
+                    st.toggle("Edit", key=toggle_edit_key)
+                    if  st.session_state[toggle_edit_key]:
+                        stroke_width = st.slider("Adjust Stroke Width", min_value=1, max_value=10, value=5, step=1)
+                        canvas_result = st_canvas(
+                            fill_color="rgba(255, 165, 0, 0.3)",  # Fixed fill color with some opacity
+                            stroke_width=stroke_width,
+                            stroke_color="black",
+                            background_image=image,
+                            update_streamlit=True,
+                            height=image.height,
+                            width=image.width,
+                            drawing_mode="freedraw",
+                            key="canvas",
+                        )
+                           # Function to handle button click
+                        def handle_button_click(image):
+                            if canvas_result.image_data is not None and not np.all((canvas_result.image_data == 0)):
                                     # Convert the canvas result to an image
                                     mask_image = Image.fromarray(canvas_result.image_data.astype('uint8'), 'RGBA')
                                     # Convert the resized image to RGBA if it is not
@@ -289,18 +288,15 @@ class Comfyflow:
                                     
                                     imagefile_upload = {'image': (name, image_byte_array, 'image/png')}
                                     imagefile_cache = ImageFile(name, image_byte_array, 'image/png')
-                                    
-
                                     # Upload the modified image
                                     self.comfy_client.upload_image(imagefile_upload, param_subfolder, upload_type, 'true')
                                     st.session_state[f"{param_key}_masked"] = imagefile_cache
-
-                                    st.session_state[draw_track_image_key] = image
-                                st.session_state[expander_key]=False
-                                st.experimental_rerun()
-
+                                    st.session_state[work_image_key] = image
+                            st.session_state[toggle_edit_key] = False
+                        st.button("Save", on_click=lambda:handle_button_click(image))
                     else:
-                         st.image(image, use_column_width=True, caption=caption)
+                        st.image(image, use_column_width=True, caption=caption)
+                   
             elif param_type == 'UPLOADVIDEO':
                 param_name = param_node['name']
                 param_help = param_node['help']
