@@ -253,8 +253,8 @@ class Comfyflow:
                                 stroke_color="black",
                                 background_image=image,
                                 update_streamlit=True,
-                                height=new_height,
-                                width=new_width,
+                                height=image.height,
+                                width=image.width,
                                 drawing_mode="freedraw",
                                 key="canvas",
                             )
