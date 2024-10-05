@@ -296,8 +296,9 @@ class Comfyflow:
                                     st.session_state[f"{param_key}_masked"] = imagefile_cache
 
                                     st.session_state[draw_track_image_key] = image
-                                    st.session_state[expander_key]=False
-                                    st.experimental_rerun()
+                                st.session_state[expander_key]=False
+                                st.experimental_rerun()
+
                     else:
                          st.image(image, use_column_width=True, caption=caption)
             elif param_type == 'UPLOADVIDEO':
