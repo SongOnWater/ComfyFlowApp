@@ -10,6 +10,7 @@ from modules import get_comfyui_object_info, get_workspace_model, check_comfyui_
 NODE_SEP = '||'
 FAQ_URL = "https://github.com/xingren23/ComfyFlowApp/wiki/FAQ"
 SUPPORTED_COMFYUI_CLASSTYPE_OUTPUT = ['PreviewImage', 'SaveImage', 'SaveAnimatedWEBP', 'SaveAnimatedPNG', 'VHS_VideoCombine']
+UNSUPPORTED_COMFYUI_CLASSTYPE_INPUT = ['upload']
 
 def format_input_node_info(param):
     # format {id}.{class_type}.{alias}.{param_name}
@@ -51,20 +52,21 @@ def parse_prompt(prompt_info, object_info_meta):
             class_type = prompt[node_id]['class_type']
             node_inputs = []
             for param in node['inputs']:
-                param_value = node['inputs'][param]
-                option_key = f"{node_id}{NODE_SEP}{param}"
-                option_value = f"{node_id}{NODE_SEP}{class_type}{NODE_SEP}{param}{NODE_SEP}{param_value}"
-                logger.debug(f"parse_prompt, {option_key} {option_value}")
-                # check param_value is []
-                if isinstance(param_value, list):
-                    logger.debug(f"ignore {option_key}, param_value is list, {param_value}")
-                    continue
-                if param == "choose file to upload":
-                    logger.debug(f"ignore {option_key}, param for 'choose file to upload'")
-                    continue
-                                
-                params_inputs.update({option_key: option_value})
-                node_inputs.append(param_value)
+                if param  not in UNSUPPORTED_COMFYUI_CLASSTYPE_INPUT:
+                    param_value = node['inputs'][param]
+                    option_key = f"{node_id}{NODE_SEP}{param}"
+                    option_value = f"{node_id}{NODE_SEP}{class_type}{NODE_SEP}{param}{NODE_SEP}{param_value}"
+                    logger.debug(f"parse_prompt, {option_key} {option_value}")
+                    # check param_value is []
+                    if isinstance(param_value, list):
+                        logger.debug(f"ignore {option_key}, param_value is list, {param_value}")
+                        continue
+                    if param == "choose file to upload":
+                        logger.debug(f"ignore {option_key}, param for 'choose file to upload'")
+                        continue
+                                    
+                    params_inputs.update({option_key: option_value})
+                    node_inputs.append(param_value)
 
             is_output = object_info_meta[class_type]['output_node']
             if is_output:
