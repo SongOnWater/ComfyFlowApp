@@ -226,59 +226,31 @@ def get_node_output_config(output_param):
         }
     }
     return node_id, output_param_inputs
-
     
 def gen_app_config():
-    prompt = st.session_state['create_prompt']
-    input_param1 = st.session_state['input_param1']
-    input_param1_name = st.session_state['input_param1_name']
-    input_param1_desc = st.session_state['input_param1_desc']
-    output_param1 = st.session_state['output_param1']
+    add_input_count=st.session_state['add_input_count']
     app_name = st.session_state['create_app_name']
     app_description = st.session_state['create_app_description']
-    logger.info(f"gen_app_config, {prompt} {input_param1} {output_param1} {app_name} {app_description}")
-    if prompt and input_param1 and output_param1 and app_name and app_description:
-        # gen and upload app.json
-        app_config = {
+    output_param1 = st.session_state['output_param1']
+    app_config = {
             "name": app_name,
             "description": app_description,
             "inputs": {},
             "outputs": {}
         }
-        # parse input_param1
-        node_id, param, input_param1_inputs = get_node_input_config(
-            input_param1, input_param1_name, input_param1_desc)
-        if node_id not in app_config['inputs'].keys():
-            app_config['inputs'][node_id] = {"inputs": {}}
-        app_config['inputs'][node_id]['inputs'][param] = input_param1_inputs
+    for index in range(0,add_input_count):
+        input_param = st.session_state[f'input_param{index}']
+        input_param_name = st.session_state[f'input_param{index}_name']
+        input_param_desc = st.session_state[f'input_param{index}_desc']
+        input_node_id, param, input_param_inputs = get_node_input_config(
+            input_param, input_param_name, input_param_desc)
+        if input_node_id not in app_config['inputs'].keys():
+            app_config['inputs'][input_node_id] = {"inputs": {}}
+        app_config['inputs'][input_node_id]['inputs'][param] = input_param_inputs
 
-        # parse input_param2
-        input_param2 = st.session_state['input_param2']
-        input_param2_name = st.session_state['input_param2_name']
-        input_param2_desc = st.session_state['input_param2_desc']
-        if input_param2:
-            node_id, param, input_param2_inputs = get_node_input_config(
-                input_param2, input_param2_name, input_param2_desc)
-            if node_id not in app_config['inputs'].keys():
-                app_config['inputs'][node_id] = {"inputs": {}}
-            app_config['inputs'][node_id]['inputs'][param] = input_param2_inputs
-
-        # parse input_param3
-        input_param3 = st.session_state['input_param3']
-        input_param3_name = st.session_state['input_param3_name']
-        input_param3_desc = st.session_state['input_param3_desc']
-        if input_param3:
-            node_id, param, input_param3_inputs = get_node_input_config(
-                input_param3, input_param3_name, input_param3_desc)
-            if node_id not in app_config['inputs'].keys():
-                app_config['inputs'][node_id] = {"inputs": {}}
-            app_config['inputs'][node_id]['inputs'][param] = input_param3_inputs
-
-        # parse output_param1
-        node_id, output_param1_inputs = get_node_output_config(output_param1)
-        app_config['outputs'][node_id] = output_param1_inputs
-        return app_config
-
+    output_node_id, output_param1_inputs = get_node_output_config(output_param1)
+    app_config['outputs'][output_node_id] = output_param1_inputs
+    return app_config
 
 def submit_app():
     app_config = gen_app_config()
@@ -571,10 +543,19 @@ def new_app_ui():
             st.markdown("Input Params:")
             params_inputs = st.session_state.get('create_prompt_inputs', {})
             params_inputs_options = list(params_inputs.keys())
+            add_input_count = st.session_state.get("add_input_count",3) 
+            for index in range(0,add_input_count):
+                add_input_config_param(params_inputs_options, index, None)
 
-            add_input_config_param(params_inputs_options, 1, None)
-            add_input_config_param(params_inputs_options, 2, None)
-            add_input_config_param(params_inputs_options, 3, None)
+            def add_more(number):
+                st.session_state["add_input_count"]=add_input_count+number
+
+            add_more_col1, reduce_less_col2 = st.columns([0.15, 0.85])
+            with add_more_col1:
+                st.button("Add More",on_click=lambda:add_more(1))
+            with reduce_less_col2:
+                st.button("Reduce Less",on_click=lambda:add_more(-1))
+
         with st.container():
             st.markdown("Output Params:")
             params_outputs = st.session_state.get('create_prompt_outputs', {})
