@@ -102,6 +102,7 @@ def page_init(layout="wide"):
         st.write(discord_badge_html, unsafe_allow_html=True)
         auth_instance =  MyAuthenticate(COOKIE_NAME, COOKIE_KEY)
         auth_instance.check_cookie()
+        return auth_instance
 
         
     

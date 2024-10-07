@@ -19,7 +19,7 @@ def back_home_signup():
 
 
 page.init_env_default()
-page.page_init(layout="centered")
+auth_instance = page.page_init(layout="centered")
 
 with st.container():
     header_row = row([0.87, 0.13], vertical_align="bottom")
@@ -29,7 +29,7 @@ with st.container():
     """)
     header_button = header_row.empty()  
 
-    auth_instance =  MyAuthenticate("comfyflow_token", "ComfyFlowApp： Load ComfyUI workflow as webapp in seconds.")
+    
     if not st.session_state['authentication_status']:
         # with header_button:
         #     client_id = os.getenv('DISCORD_CLIENT_ID')
