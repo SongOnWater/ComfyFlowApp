@@ -11,6 +11,9 @@ from streamlit.source_util import (
     invalidate_pages_cache,
 )
 
+from modules.authenticate import MyAuthenticate
+COOKIE_NAME = "comfyflow_token" 
+COOKIE_KEY = "ComfyFlowApp： Load ComfyUI workflow as webapp in seconds."
 def change_mode_pages(mode):
     main_script_path = os.path.abspath('../Home.py')
     invalidate_pages_cache()
@@ -97,6 +100,9 @@ def page_init(layout="wide"):
             )
         )
         st.write(discord_badge_html, unsafe_allow_html=True)
+        auth_instance =  MyAuthenticate(COOKIE_NAME, COOKIE_KEY)
+        auth_instance.check_cookie()
+
         
     
 

@@ -209,7 +209,6 @@ class MyAuthenticate():
                 st.session_state['name'] = None
                 st.session_state['username'] = None
                 st.session_state['authentication_status'] = None
-
     def _check_cookie(self):
         """
         Checks the validity of the reauthentication cookie.
@@ -251,7 +250,8 @@ class MyAuthenticate():
             logger.info(f"register user success, {ret.json()}")
             st.success(f"Register user success, {username}")
 
-
+    def check_cookie(self):
+        self._check_cookie()
     def register_user_info(self, form_name: str, location: str = 'main', data: dict={}) -> bool:
         if location not in ['main', 'sidebar']:
             raise ValueError("Location must be one of 'main' or 'sidebar'")
