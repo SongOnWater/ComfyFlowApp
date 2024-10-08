@@ -115,7 +115,7 @@ def stylable_button_container():
                 background-color: rgb(28 131 225);
                 color: white;
                 border-radius: 4px;
-                width: 120px;
+                width: 140px;
             }
             button:hover, button:focus {
                 border: 0px solid rgb(28 131 225);

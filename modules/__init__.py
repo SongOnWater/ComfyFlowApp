@@ -3,6 +3,8 @@ from loguru import logger
 import streamlit as st
 from enum import Enum
 
+
+
 # enum app status
 class AppStatus(Enum):
     CREATED = "Created"
@@ -23,6 +25,13 @@ def get_workspace_model():
     logger.debug("get_workspace_instance")
     from modules.workspace_model import WorkspaceModel
     sqliteInstance = WorkspaceModel()
+    return sqliteInstance
+
+@st.cache_resource
+def get_group_app_model():
+    logger.debug("get_workspace_instance")
+    from modules.group_app_model import GroupAppModel
+    sqliteInstance = GroupAppModel()
     return sqliteInstance
 
 @st.cache_resource

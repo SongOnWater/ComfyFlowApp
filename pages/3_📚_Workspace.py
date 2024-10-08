@@ -10,6 +10,7 @@ from manager.app_manager import start_app, stop_app
 from modules.workspace_model import AppStatus
 from streamlit import config
 from modules.new_app import new_app_ui, edit_app_ui
+from modules.new_grop_app import new_group_app_ui
 from modules.preview_app import preview_app_ui
 from modules.publish_app import publish_app_ui
 import random
@@ -51,7 +52,17 @@ def create_app_info_ui(app):
 
 def click_new_app():
     logger.info("new app...")
-    st.session_state['new_app'] = True    
+    st.session_state['new_app'] = True
+    st.session_state.pop('new_group_app', None)    
+    st.session_state.pop('edit_app', None)
+    st.session_state.pop('preview_app', None)
+    st.session_state.pop('publish_app', None)
+
+def click_new_group_app():
+    logger.info("new group app...")
+    
+    st.session_state['new_group_app'] = True 
+    st.session_state.pop('new_app', None)
     st.session_state.pop('edit_app', None)
     st.session_state.pop('preview_app', None)
     st.session_state.pop('publish_app', None)
@@ -60,6 +71,7 @@ def click_edit_app(app):
     logger.info(f"edit app: {app.name}")
     st.session_state['edit_app'] = app
     st.session_state.pop('new_app', None)
+    st.session_state.pop('new_group_app', None)
     st.session_state.pop('preview_app', None)
     st.session_state.pop('publish_app', None)
 
@@ -67,6 +79,7 @@ def click_preview_app(app):
     logger.info(f"preview app: {app.name}")
     st.session_state['preview_app'] = app
     st.session_state.pop('new_app', None)
+    st.session_state.pop('new_group_app', None)
     st.session_state.pop('edit_app', None)
     st.session_state.pop('publish_app', None)
 
@@ -243,6 +256,8 @@ def create_operation_ui(app):
 def is_load_workspace_page():
     if 'new_app' in st.session_state:
         return False
+    if 'new_grop_app' in st.session_state:
+        return False
     if 'preview_app' in st.session_state:
         return False
     if 'publish_app' in st.session_state:
@@ -268,6 +283,8 @@ with st.container():
 
     if 'new_app' in st.session_state:
         new_app_ui()
+    elif 'new_group_app' in st.session_state:
+        new_group_app_ui()
     elif 'edit_app' in st.session_state:
         edit_app_ui(app=st.session_state['edit_app'])
     elif 'preview_app' in st.session_state:
@@ -277,13 +294,13 @@ with st.container():
     
     elif is_load_workspace_page():
         with page.stylable_button_container():
-            header_row = row([0.85, 0.15], vertical_align="top")
+            header_row = row([0.6, 0.20,0.20], vertical_align="top")
             header_row.markdown("""
                 ### My Workspace
                 create and manage your comfyflowapps.
             """)
             new_app_button = header_row.button("New App", help="Create a new app from comfyui workflow.", on_click=click_new_app)
-
+            new_group_app_button = header_row.button("New Grop App", help="Create a new grop app from comfyui workflow.", on_click=click_new_group_app,use_container_width=True)
             if not st.session_state.get('username'):
                 st.warning("Please go to homepage for your login :point_left:")
            
