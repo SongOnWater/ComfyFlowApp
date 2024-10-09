@@ -7,10 +7,11 @@ import modules.page as page
 from modules import get_workspace_model, check_comfyui_alive, get_comfyflow_token
 from streamlit_extras.row import row
 from manager.app_manager import start_app, stop_app
+from modules.preview_group_app import preview_group_app_ui
 from modules.workspace_model import AppStatus
 from streamlit import config
 from modules.new_app import new_app_ui, edit_app_ui
-from modules.new_grop_app import new_group_app_ui
+from modules.new_group_app import edit_group_app_ui, new_group_app_ui
 from modules.preview_app import preview_app_ui
 from modules.publish_app import publish_app_ui
 import random
@@ -286,9 +287,17 @@ with st.container():
     elif 'new_group_app' in st.session_state:
         new_group_app_ui()
     elif 'edit_app' in st.session_state:
-        edit_app_ui(app=st.session_state['edit_app'])
+        app = st.session_state['edit_app']
+        if app.template=="group":
+            edit_group_app_ui(app)
+        else: 
+            edit_app_ui(app=app)
     elif 'preview_app' in st.session_state:
-        preview_app_ui(st.session_state['preview_app'])
+        app = st.session_state['preview_app']
+        if app.template=="group":
+            preview_group_app_ui(app)
+        else:
+            preview_app_ui(app)
     elif 'publish_app' in st.session_state:    
         publish_app_ui(app=st.session_state['publish_app'], cookies=cookies)
     
