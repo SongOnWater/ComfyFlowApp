@@ -11,7 +11,7 @@ from modules import get_comfyui_object_info, get_group_app_model, get_workspace_
 NODE_SEP = '||'
 FAQ_URL = "https://github.com/xingren23/ComfyFlowApp/wiki/FAQ"
 SUPPORTED_COMFYUI_CLASSTYPE_OUTPUT = ['PreviewImage', 'SaveImage', 'SaveAnimatedWEBP', 'SaveAnimatedPNG', 'VHS_VideoCombine','LayerUtility: SaveImagePlus']
-UNSUPPORTED_COMFYUI_CLASSTYPE_INPUT = ['upload']
+UNSUPPORTED_COMFYUI_CLASSTYPE_INPUT = ['upload','speak_and_recognation']
 
 def format_input_node_info(param,group_index):
     # format {id}.{class_type}.{alias}.{param_name}
@@ -189,7 +189,7 @@ def get_node_input_config(index,input_param, app_input_name, app_input_descripti
     logger.debug(f"{node_id} {class_type} {param} {param_value}, class input {class_input}")
 
     input_config = {}
-    if isinstance(class_input[param][0], str):
+    if class_input[param] and isinstance(class_input[param][0], str):
 
         if class_input[param][0] == 'STRING':
             input_config = {
@@ -287,11 +287,12 @@ def gen_group_config(group_Index):
         input_param = st.session_state[f'group_{group_Index}_input_param_{index}']
         input_param_name = st.session_state[f'group_{group_Index}_input_param_{index}_name']
         input_param_desc = st.session_state[f'group_{group_Index}_input_param_{index}_desc']
-        input_node_id, param, input_param_inputs = get_node_input_config(group_Index,
-            input_param, input_param_name, input_param_desc)
-        if input_node_id not in app_config['inputs'].keys():
-            app_config['inputs'][input_node_id] = {"inputs": {}}
-        app_config['inputs'][input_node_id]['inputs'][param] = input_param_inputs
+        if input_param :
+            input_node_id, param, input_param_inputs = get_node_input_config(group_Index,
+                input_param, input_param_name, input_param_desc)
+            if input_node_id not in app_config['inputs'].keys():
+                app_config['inputs'][input_node_id] = {"inputs": {}}
+            app_config['inputs'][input_node_id]['inputs'][param] = input_param_inputs
 
     output_param1 = st.session_state[f'group_{group_Index}_output_param_{0}']
     output_node_id, output_param1_inputs = get_node_output_config(group_Index,output_param1)
@@ -310,7 +311,7 @@ def submit_app():
             st.session_state['create_submit_info'] = "exist"
         else:
             # resize image
-            img = Image.open(st.session_state['create_upload_image'])
+            img = Image.open(st.session_state['create_upload_image']) 
             img = img.resize((64,64))
             img_bytesio = BytesIO()
             img.save(img_bytesio, format="PNG")
@@ -323,7 +324,7 @@ def submit_app():
             app['workflow_conf'] = json.dumps(st.session_state['create_workflow'])
             app['status'] = 'created'
             app['template'] = 'group'
-            app['image'] = img_bytesio.getvalue()
+            app['image'] = img_bytesio.getvalue() 
             app['username'] = st.session_state['username']
             get_workspace_model().create_app(app)
 
@@ -333,7 +334,7 @@ def submit_app():
         logger.info(f"submit app error, {app_config['name']}")
         st.session_state['create_submit_info'] = "error"
 
-def submit_group(group_index):
+def submit_group(group_index,id):
     app_config = gen_group_config(group_index)
     if app_config:
         # check user login
@@ -343,7 +344,7 @@ def submit_group(group_index):
 
         # submit to sqlite
         if get_workspace_model().get_app(app_config['name']):
-            img = Image.open(st.session_state['create_upload_image'])
+            img = Image.open(st.session_state['create_upload_image']) if st.session_state['create_upload_image'] else app.img
             img = img.resize((64,64))
             img_bytesio = BytesIO()
             img.save(img_bytesio, format="PNG")
@@ -355,7 +356,7 @@ def submit_group(group_index):
             app['api_conf'] = st.session_state[f'create_prompt_{group_index}']
             app['workflow_conf'] = json.dumps(st.session_state['create_workflow'])
             app['status'] = 'created'
-            app['template'] = app_config['name']
+            app['template'] = id
             app['image'] = img_bytesio.getvalue()
             app['username'] = st.session_state['username']
             get_group_app_model().create_app(app)
@@ -367,6 +368,37 @@ def submit_group(group_index):
     else:
         logger.info(f"submit app error, {app_config['name']}")
         st.session_state[f'create_submit_group_info_{group_index}'] = "error"
+
+def save_group(group_index,id):
+    app_config = gen_group_config(group_index)
+    if app_config:
+        # check user login
+        if not st.session_state.get('username'):
+            st.warning("Please go to homepage for your login :point_left:")
+            st.stop()
+            # img = Image.open(st.session_state['create_upload_image']) if st.session_state['create_upload_image'] else app.img
+            # img = img.resize((64,64))
+            # img_bytesio = BytesIO()
+            # img.save(img_bytesio, format="PNG")
+            
+        
+        name = st.session_state[f'create_group_name_{group_index}']
+        description = st.session_state[f"create_group_description_{group_index}"] 
+        app_conf = json.dumps(app_config)
+        # app['api_conf'] = st.session_state[f'create_prompt_{group_index}']
+        # app['workflow_conf'] = json.dumps(st.session_state['create_workflow'])
+        # app['status'] = 'created'
+        # app['template'] = id
+        # app['image'] = img_bytesio.getvalue()
+        # app['username'] = st.session_state['username']
+        get_group_app_model().edit_app(id,name,description,app_conf)
+
+        logger.info(f"Save app successfully, {app_config['name']}")
+        st.session_state[f'create_save_group_info_{group_index}'] = "success"
+
+    else:
+        logger.info(f"submit app error, {app_config['name']}")
+        st.session_state[f'create_save_group_info_{group_index}'] = "error"        
 def save_app(app):
     app_config = gen_app_config()
     if app_config:
@@ -437,7 +469,8 @@ def process_group_api_json(index,api_conf=None):
     workflow_content = api_conf
     if st.session_state.get(f'create_upload_group_{index}'):
         upload_workflow = st.session_state.get(f'create_upload_group_{index}')
-        workflow_content = upload_workflow.read()
+        workflow_content = json.loads(upload_workflow.read())
+        workflow_content = json.dumps(workflow_content)
     if workflow_content:
         try:
             # Store the parsed JSON in the session state
@@ -520,11 +553,11 @@ def new_group_app_ui():
             if submit_button:
                 submit_info = st.session_state.get('create_submit_info')
                 if submit_info == 'success':
-                    st.success("Submit app successfully, back your workspace or preview this app")
+                    st.success("Submit group successfully, back your workspace or preview this app")
                 elif submit_info == 'exist':
-                    st.error("Submit app error, app name has existed")
+                    st.error("Submit group error, app name has existed")
                 else:
-                    st.error(f"Submit app error, please check up app params, refer to {FAQ_URL}")
+                    st.error(f"Submit group error, please check up app params, refer to {FAQ_URL}")
             #operation_row.empty()
             
 
@@ -537,6 +570,8 @@ def new_group_app_ui():
                     st.image(image_upload, use_column_width=True, caption='ComfyUI Image with workflow info')
     if  'create_submit_info' in st.session_state and st.session_state['create_submit_info'] == 'success':        
         if  'create_workflow_groups' in st.session_state and st.session_state['create_workflow_groups']:
+            app_config = gen_app_config()
+            app = get_workspace_model().get_app(app_config['name'])
             for group_index,group in enumerate(st.session_state['create_workflow_groups']):
                 group_name = group["title"]
                 with st.expander(f"Config params of group: {group_name}", expanded=True):
@@ -587,7 +622,7 @@ def new_group_app_ui():
                                                         type="primary",
                                                         use_container_width=True, 
                                                         help="Submit group params",
-                                                        on_click=lambda idx=group_index: submit_group(idx))     
+                                                        on_click=lambda idx=group_index: submit_group(idx,app.id))     
                     if submit_button:
                         submit_info = st.session_state.get(f'create_submit_group_info_{group_index}')
                         if submit_info == 'success':
@@ -648,9 +683,9 @@ def edit_group_app_ui(app):
             operation_row = row([0.3, 0.5, 0.2])
             submit_button = operation_row.button("Submit App", key='create_submit_app', type="primary",
                                                 use_container_width=True, 
-                                                help="Submit app params",on_click=save_app)     
+                                                help="Submit app params",on_click=save_app, args=(app,))     
             if submit_button:
-                submit_info = st.session_state.get('create_submit_info')
+                submit_info = st.session_state.get('save_submit_info')
                 if submit_info == 'success':
                     st.success("Submit app successfully, back your workspace or preview this app")
                 elif submit_info == 'exist':
@@ -668,7 +703,7 @@ def edit_group_app_ui(app):
             _, image_col, _ = st.columns([0.2, 0.6, 0.2])
             with image_col:
                 st.image(image_upload, use_column_width=True, caption='ComfyUI Image with workflow info')
-    workflow_groups=get_group_app_model().get_apps_by_template(app.name)
+    workflow_groups=get_group_app_model().get_apps_by_template(app.id)
     if  'create_workflow_groups' in st.session_state and st.session_state['create_workflow_groups']:
         workflow_groups = st.session_state['create_workflow_groups']
     for group_index,group in enumerate(workflow_groups):
@@ -693,30 +728,54 @@ def edit_group_app_ui(app):
 
                 params_inputs = st.session_state.get(f'create_prompt_inputs_{group_index}', {})
                 params_inputs_options = list(params_inputs.keys())
+                inputs_map=json.loads(group["app_conf"])["inputs"]
 
-                if f"add_input_count_{group_index}" not in st.session_state:
-                    st.session_state[f"add_input_count_{group_index}"]=3
+                index = 0
+                for node_id, inputs_value in inputs_map.items():
+                    for input_param_type, input_param_value in inputs_value["inputs"].items():
+                        param_name = input_param_value['name']
+                        param_help = input_param_value['help']
+                        param = {
+                        'index': f"{node_id}{NODE_SEP}{input_param_type}",
+                        'name': param_name,
+                        'help': param_help,
+                        }
+                        add_input_config_param(group_index,params_inputs_options, index, param)
+                        index += 1
+                
+                st.session_state[f"add_input_count_{group_index}"] = index
+                ## add or reduce parameters on Edit will add complexity so don't implement currently        
+                # if f"add_input_count_{group_index}" not in st.session_state:
+                #     st.session_state[f"add_input_count_{group_index}"]=param_index+1
 
-                add_input_count = st.session_state[f"add_input_count_{group_index}"]
-                for i in range(0,add_input_count):
-                    group["app_conf"]["inputs"][i]
-                    group.api_conf
-                    add_input_config_param(group_index,params_inputs_options, i, None)
+                # add_input_count = st.session_state[f"add_input_count_{group_index}"]
+                # for i in range(0,add_input_count-param_index):
+                #     add_input_config_param(group_index,params_inputs_options, i, None)
 
-                def add_more(number):
-                    st.session_state[f"add_input_count_{group_index}"]=add_input_count+number
+                # def add_more(number):
+                #     st.session_state[f"add_input_count_{group_index}"]=add_input_count+number
 
-                add_more_col1, reduce_less_col2 = st.columns([0.15, 0.85])
-                with add_more_col1:
-                    st.button("Add More",key=f'add_more_{group_index}',on_click=lambda:add_more(1))
-                with reduce_less_col2:
-                    st.button("Reduce Less",key=f'reduce_less_{group_index}',on_click=lambda:add_more(-1))
+                # add_more_col1, reduce_less_col2 = st.columns([0.15, 0.85])
+                # with add_more_col1:
+                #     st.button("Add More",key=f'add_more_{group_index}',on_click=lambda:add_more(1))
+                # with reduce_less_col2:
+                #     st.button("Reduce Less",key=f'reduce_less_{group_index}',on_click=lambda:add_more(-1))
 
             with st.container():
                 st.markdown("Output Params:")
                 params_outputs = st.session_state.get(f'create_prompt_outputs_{group_index}', {})
                 params_outputs_options = list(params_outputs.keys())
-
+                ## out put not save any paraments, so don't implement  currently
+                # inputs_map=json.loads(group["app_conf"])["outputs"]
+                # node_id, outputs_value = inputs_map.items()[0]
+                # output_param_value=outputs_value["outputs"]
+                # param_name = output_param_value['name']
+                # param_help = output_param_value['help']
+                # param = {
+                #         'index': f"{node_id}{NODE_SEP}{input_param_type}",
+                #         'name': param_name,
+                #         'help': param_help,
+                #         }
                 add_output_config_param(group_index,params_outputs_options, 0, None)
                 
             operation_row = row([0.3, 0.5, 0.2])
@@ -725,15 +784,13 @@ def edit_group_app_ui(app):
                                                 type="primary",
                                                 use_container_width=True, 
                                                 help="Submit group params",
-                                                on_click=lambda idx=group_index: submit_group(idx))     
+                                                on_click=lambda idx=group_index: save_group(idx,app.id))     
             if submit_button:
-                submit_info = st.session_state.get(f'create_submit_group_info_{group_index}')
+                submit_info = st.session_state.get(f'create_save_group_info_{group_index}')
                 if submit_info == 'success':
-                    st.success("Submit app successfully, back your workspace or preview this app")
-                elif submit_info == 'exist':
-                    st.error("Submit app error, app name has existed")
+                    st.success("Save group successfully, back your workspace or preview this app")
                 else:
-                    st.error(f"Submit app error, please check up app params, refer to {FAQ_URL}")
+                    st.error(f"Save group error, please check up app params, refer to {FAQ_URL}")
 
             # operation_row.empty()
             # next_placeholder = operation_row.empty()    

@@ -13,7 +13,7 @@ def on_preview_workspace():
 def preview_group_app_ui(app):
     with page.stylable_button_container():
         header_row = row([0.85, 0.15], vertical_align="top")
-        header_row.title("💡Preview app")
+        header_row.title("💡Preview Group App")
         header_row.button("Back Workspace", help="Back to your workspace", key='preview_back_workspace', on_click=on_preview_workspace)
 
         # check user login
@@ -31,7 +31,7 @@ def preview_group_app_ui(app):
             st.error(f"Prview app {name} error, ComfyUI server is not alive")
             st.stop()
         group_app_model = get_group_app_model()
-        groups = group_app_model.get_apps_by_template(name)
+        groups = group_app_model.get_apps_by_template(app.id)
         comfy_client = get_comfy_client()
         for group in groups:
             api_data = group.api_conf

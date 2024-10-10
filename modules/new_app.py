@@ -371,12 +371,12 @@ def edit_app_ui(app):
             input_params = []
             for node_id in app_conf['inputs']:
                 node_inputs = app_conf['inputs'][node_id]['inputs']
-                for param in node_inputs:
-                    param_name = node_inputs[param]['name']
-                    param_help = node_inputs[param]['help']
+                for param_key, param_value in node_inputs.items():
+                    param_name = param_value['name']
+                    param_help = param_value['help']
 
                     param = {
-                        'index': f"{node_id}{NODE_SEP}{param}",
+                        'index': f"{node_id}{NODE_SEP}{param_key}",
                         'name': param_name,
                         'help': param_help,
                     }
