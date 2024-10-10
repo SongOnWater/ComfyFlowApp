@@ -19,12 +19,12 @@ class ImageFile:
         self.byte_array = byte_array
         self.mime_type = mime_type  
 class Comfyflow:
-    def __init__(self, comfy_client, api_data, app_data) -> Any:
     
+    def __init__(self, comfy_client, app) -> Any:
         self.comfy_client = comfy_client
-        self.api_json = json.loads(api_data)
-        self.app_json = json.loads(app_data)
-
+        self.app = app
+        self.app_json = json.loads(app.app_conf)
+        self.api_json = json.loads(app.api_conf)
     
   
 
@@ -163,7 +163,7 @@ class Comfyflow:
                 param_max = param_node['max']
                             
                 param_key = f"{node_id}_{param_name}"
-                st.text_area(param_name, value =param_default, key=param_key, help=param_help, max_chars=param_max, height=500)
+                st.text_area(param_name, value =param_default, key=param_key, help=param_help, max_chars=param_max, height=100)
             elif param_type == "NUMBER":
                 param_name = param_node['name']
                 param_default = param_node['default']
@@ -319,8 +319,8 @@ class Comfyflow:
         if 'progress_queue' not in st.session_state:   
             st.session_state['progress_queue'] = queue.Queue()
         
-        app_name = self.app_json['name']
-        app_description = self.app_json['description']
+        app_name = self.app.name 
+        app_description = self.app.description 
         if show_header:
             st.title(f'{app_name}')
             st.markdown(f'{app_description}')
@@ -336,7 +336,7 @@ class Comfyflow:
                     node_inputs = node['inputs']
                     self.create_ui_input(node_id, node_inputs)
 
-                gen_button = st.button(label='Generate', use_container_width=True, on_click=self.generate)
+                gen_button = st.button(label='Generate', key=f'generate_key_{self.app.id}', use_container_width=True, on_click=self.generate)
 
 
         with output_col:

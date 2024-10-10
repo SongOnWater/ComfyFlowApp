@@ -64,9 +64,6 @@ with st.container():
         st.warning(f"App {app_id} hasn't existed")
     else:
         app = app_id_map[app_id]
-        app_data = app.app_conf
-        api_data = app.api_conf
-
         from modules.comfyflow import Comfyflow
-        comfy_flow = Comfyflow(comfy_client=get_comfy_client(), api_data=api_data, app_data=app_data)
+        comfy_flow = Comfyflow(comfy_client=get_comfy_client(), app=app)
         comfy_flow.create_ui(show_header=True)

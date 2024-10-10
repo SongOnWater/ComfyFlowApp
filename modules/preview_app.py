@@ -25,8 +25,6 @@ def preview_app_ui(app):
     with st.container():
         name = app.name
         status = app.status
-        api_data = app.api_conf
-        app_data = app.app_conf
 
         if not check_comfyui_alive():
             logger.warning("ComfyUI server is not alive, please check it")
@@ -34,7 +32,7 @@ def preview_app_ui(app):
             st.stop()
         
         comfy_client = get_comfy_client()
-        comfyflow = Comfyflow(comfy_client=comfy_client, api_data=api_data, app_data=app_data)
+        comfyflow = Comfyflow(comfy_client=comfy_client, app=app)
         comfyflow.create_ui()
         if status == AppStatus.CREATED.value:
             if f"{name}_previewed" in st.session_state:
@@ -70,8 +68,6 @@ def enter_app_ui(app):
             st.stop()
 
         st.markdown(f"{description}")
-        api_data = app.api_conf
-        app_data = app.app_conf
         comfy_client = get_comfy_client()
-        comfyflow = Comfyflow(comfy_client=comfy_client, api_data=api_data, app_data=app_data)
+        comfyflow = Comfyflow(comfy_client=comfy_client, app=app)
         comfyflow.create_ui(show_header=False)                                    

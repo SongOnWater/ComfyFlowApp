@@ -71,13 +71,20 @@ class GroupAppModel:
             return apps
         
 
-    def get_apps_by_template(self, name):
+    def get_apps_by_template(self, template):
         with self.session as s:
-            logger.info(f"get app by template: {name}")
+            logger.info(f"get app by template: {template}")
             sql = text(f'SELECT * FROM {self.app_talbe_name} WHERE template=:template;')
-            apps = s.execute(sql, {'template': name}).fetchall()
+            apps = s.execute(sql, {'template': template}).fetchall()
             return apps
-        
+    
+    def delete_apps_by_template(self, template):
+        with self.session as s:
+            logger.info(f"delete apps by template: {template}")
+            sql = text(f'DELETE FROM {self.app_talbe_name} WHERE template=:template;')
+            s.execute(sql, dict(template=template))
+            s.commit() 
+  
     def get_app_by_id(self, id):
         with self.session as s:
             logger.info(f"get app by id: {id}")

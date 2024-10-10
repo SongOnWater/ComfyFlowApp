@@ -34,7 +34,7 @@ if not app:
     st.write(f"Not found this App name:{app_name}")
     st.stop()
 comfy_client = get_comfy_client()
-comfyflow = Comfyflow(comfy_client=comfy_client, api_data=app.api_conf, app_data=app.app_conf)
+comfyflow = Comfyflow(comfy_client=comfy_client, app=app)
 comfyflow.create_ui()
 
 

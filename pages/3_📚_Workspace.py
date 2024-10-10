@@ -4,7 +4,7 @@ from io import BytesIO
 from loguru import logger
 import streamlit as st
 import modules.page as page
-from modules import get_workspace_model, check_comfyui_alive, get_comfyflow_token
+from modules import get_group_app_model, get_workspace_model, check_comfyui_alive, get_comfyflow_token
 from streamlit_extras.row import row
 from manager.app_manager import start_app, stop_app
 from modules.preview_group_app import preview_group_app_ui
@@ -96,9 +96,12 @@ def click_publish_app(app):
     st.session_state.pop('preview_app', None)
     
 
-def click_delete_app(name):
-    logger.info(f"delete app: {name}")
-    get_workspace_model().delete_app(name)
+def click_delete_app(app):
+    logger.info(f"delete app: {app.name}")
+    get_workspace_model().delete_app(app.name)
+    if app.template=="group":
+        get_group_app_model().delete_apps_by_template(app.id)
+    
 
 def click_install_app(app):
     if app.status == AppStatus.CREATED.value:
@@ -240,7 +243,7 @@ def create_operation_ui(app):
     operate_row.markdown("")
 
     operate_row.button("❌ Delete", help="Delete the app", key=f"{id}-button-delete", 
-                       on_click=click_delete_app, args=(name,), disabled=disabled)
+                       on_click=click_delete_app, args=(app,), disabled=disabled)
     
 
     # publish_button = operate_row.button("✈️ Publish", help="Publish the app with template", 
