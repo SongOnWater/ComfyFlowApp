@@ -11,7 +11,8 @@ from modules import get_comfyui_object_info, get_group_app_model, get_workspace_
 NODE_SEP = '||'
 FAQ_URL = "https://github.com/xingren23/ComfyFlowApp/wiki/FAQ"
 SUPPORTED_COMFYUI_CLASSTYPE_OUTPUT = ['PreviewImage', 'SaveImage', 'SaveAnimatedWEBP', 'SaveAnimatedPNG', 'VHS_VideoCombine','LayerUtility: SaveImagePlus']
-UNSUPPORTED_COMFYUI_CLASSTYPE_INPUT = ['upload','speak_and_recognation']
+UNSUPPORTED_COMFYUI_INPUT_KEYS = ['upload','speak_and_recognation']
+INTERACTIVE_COMFYUI_CLASSTYPES =["RepeatableImageChooser",]
 
 def format_input_node_info(param,group_index):
     # format {id}.{class_type}.{alias}.{param_name}
@@ -48,12 +49,22 @@ def parse_prompt(prompt_info, object_info_meta):
         prompt = json.loads(prompt_info)
         params_inputs = {}
         params_outputs = {}
+        interactive_nodes = {}
         for node_id in prompt:
             node = prompt[node_id]
-            class_type = prompt[node_id]['class_type']
             node_inputs = []
+            class_type = prompt[node_id]['class_type']
+            if class_type in INTERACTIVE_COMFYUI_CLASSTYPES:
+                option_key = f"{node_id}{NODE_SEP}{class_type}"
+                if len(node_inputs) == 0:
+                    option_value = f"{node_id}{NODE_SEP}{class_type}{NODE_SEP}None"
+                else:
+                    option_value = f"{node_id}{NODE_SEP}{class_type}{NODE_SEP}{node_inputs}"
+                interactive_nodes.update({option_key: option_value})
+                continue
+            
             for param in node['inputs']:
-                if param  not in UNSUPPORTED_COMFYUI_CLASSTYPE_INPUT:
+                if param  not in UNSUPPORTED_COMFYUI_INPUT_KEYS:
                     param_value = node['inputs'][param]
                     option_key = f"{node_id}{NODE_SEP}{param}"
                     option_value = f"{node_id}{NODE_SEP}{class_type}{NODE_SEP}{param}{NODE_SEP}{param_value}"
@@ -81,11 +92,10 @@ def parse_prompt(prompt_info, object_info_meta):
                     params_outputs.update({option_key: option_value})
                 else:
                     logger.warning(f"Only support SaveImage as output node, {class_type}")
-
-        return (params_inputs, params_outputs)
+        return (params_inputs, params_outputs,interactive_nodes)
     except Exception as e:
         st.error(f"parse_prompt error, {e} refer to {FAQ_URL}")
-        return (None, None)
+        return (None, None,None)
 
 
 
@@ -121,58 +131,7 @@ def process_workflow_json():
         st.session_state['create_workflow_groups'] = None
         st.session_state['create_submit_info']=None
 
-        
-def process_image_change():
-    comfyui_object_info = st.session_state.get('comfyui_object_info')
-    upload_image = st.session_state['create_upload_image']
-    if upload_image:
-        metas = process_workflow_meta(upload_image)
-        if metas and 'prompt' in metas.keys() and 'workflow' in metas.keys():
-            st.session_state['create_prompt'] = metas.get('prompt')
-            st.session_state['create_workflow'] = metas.get('workflow')
-            inputs, outputs = parse_prompt(metas.get('prompt'), comfyui_object_info)
-            if inputs:
-                logger.info(f"create_prompt_inputs, {inputs}")
-                st.success(f"parse inputs from workflow image, input nodes {len(inputs)}")
-                st.session_state['create_prompt_inputs'] = inputs
-            else:
-                st.error(f"parse workflow from image error, inputs is None, refer to {FAQ_URL}")
-
-            if outputs:
-                logger.info(f"create_prompt_outputs, {outputs}")
-                st.success(f"parse outputs from workflow image, output nodes {len(outputs)}")
-                st.session_state['create_prompt_outputs'] = outputs
-            else:
-                st.error(f"parse workflow from image error, outputs is None, refer to {FAQ_URL}")
-            
-        else:
-            st.error(f"the image don't contain workflow info, refer to {FAQ_URL}")
-    else:
-        st.session_state['create_prompt'] = None
-        st.session_state['create_workflow'] = None
-        st.session_state['create_prompt_inputs'] = {}
-        st.session_state['create_prompt_outputs'] = {}
-
-def process_image_edit(api_prompt):
-    comfyui_object_info = st.session_state.get('comfyui_object_info')
-    if api_prompt:
-        st.session_state['create_prompt'] =api_prompt
-        inputs, outputs = parse_prompt(api_prompt, comfyui_object_info)
-        if inputs:
-            logger.info(f"create_prompt_inputs, {inputs}")
-            st.success(f"parse inputs from workflow image, input nodes {len(inputs)}")
-            st.session_state['create_prompt_inputs'] = inputs
-        else:
-            st.error(f"parse workflow from image error, inputs is None, refer to {FAQ_URL}")
-
-        if outputs:
-            logger.info(f"create_prompt_outputs, {outputs}")
-            st.success(f"parse outputs from workflow image, output nodes {len(outputs)}")
-            st.session_state['create_prompt_outputs'] = outputs
-        else:
-            st.error(f"parse workflow from image error, outputs is None, refer to {FAQ_URL}")
-    else:
-        st.error(f"the image don't contain workflow info, refer to {FAQ_URL}")
+       
         
 
 def get_node_input_config(index,input_param, app_input_name, app_input_description):
@@ -261,6 +220,16 @@ def get_node_output_config(group_Index,output_param):
         }
     }
     return node_id, output_param_inputs
+
+def get_node_interactive_config(group_Index,output_param):
+    params_outputs = st.session_state.get(f'create_prompt_interactive_nodes_{group_Index}', {})
+    output_param_value = params_outputs[output_param]
+    node_id, class_type, param = output_param_value.split(NODE_SEP)
+    output_param_inputs = {
+        "outputs": {
+        }
+    }
+    return node_id, output_param_inputs
     
 def gen_app_config():
     app_name = st.session_state['create_app_name']
@@ -281,7 +250,8 @@ def gen_group_config(group_Index):
             "name": app_name,
             "description": app_description,
             "inputs": {},
-            "outputs": {}
+            "outputs": {},
+            "interactive":{}
         }
     for index in range(0,add_input_count):
         input_param = st.session_state[f'group_{group_Index}_input_param_{index}']
@@ -297,6 +267,9 @@ def gen_group_config(group_Index):
     output_param1 = st.session_state[f'group_{group_Index}_output_param_{0}']
     output_node_id, output_param1_inputs = get_node_output_config(group_Index,output_param1)
     app_config['outputs'][output_node_id] = output_param1_inputs
+
+    # interactive_node_id, interactive_param1_inputs = get_node_interactive_config(group_Index)
+    # app_config['interactive'][interactive_node_id] = interactive_param1_inputs
     return app_config
 def submit_app():
     app_config = gen_app_config()
@@ -475,20 +448,25 @@ def process_group_api_json(index,api_conf=None):
         try:
             # Store the parsed JSON in the session state
             st.session_state[f'create_prompt_{index}'] = workflow_content
-            inputs, outputs = parse_prompt(workflow_content, comfyui_object_info)
+            inputs, outputs ,interactive_nodes= parse_prompt(workflow_content, comfyui_object_info)
             if inputs:
                 logger.info(f"create_prompt_inputs, {inputs}")
-                st.success(f"parse inputs from workflow image, input nodes {len(inputs)}")
+                st.success(f"parse inputs from workflow API json, input nodes {len(inputs)}")
                 st.session_state[f'create_prompt_inputs_{index}'] = inputs
             else:
-                st.error(f"parse workflow from image error, inputs is None, refer to {FAQ_URL}")
+                st.error(f"parse workflow from API json error, inputs is None, refer to {FAQ_URL}")
 
             if outputs:
                 logger.info(f"create_prompt_outputs, {outputs}")
-                st.success(f"parse outputs from workflow image, output nodes {len(outputs)}")
+                st.success(f"parse outputs from workflow API json, output nodes {len(outputs)}")
                 st.session_state[f'create_prompt_outputs_{index}'] = outputs
             else:
-                st.error(f"parse workflow from image error, outputs is None, refer to {FAQ_URL}")
+                st.error(f"parse workflow from API json error, outputs is None, refer to {FAQ_URL}")
+
+            if interactive_nodes:
+                logger.info(f"create_prompt_interactive_nodes, {interactive_nodes}")
+                st.success(f"parse outputs from workflow API json , interactive nodes {len(interactive_nodes)}")
+                st.session_state[f'create_prompt_interactive_nodes_{index}'] = interactive_nodes
              # Extract the "groups" data
             logger.info("Successfully processed uploaded prompt API JSON")
         except json.JSONDecodeError:
@@ -499,6 +477,70 @@ def process_group_api_json(index,api_conf=None):
             st.session_state['create_prompt'] = None
     else:
         st.session_state['create_prompt'] = None
+
+def new_group_app_inputs_ui():      
+    if  'create_workflow_groups' in st.session_state and st.session_state['create_workflow_groups']:
+        app_config = gen_app_config()
+        app = get_workspace_model().get_app(app_config['name'])
+        for group_index,group in enumerate(st.session_state['create_workflow_groups']):
+            group_name = group["title"]
+            with st.expander(f"Config params of group: {group_name}", expanded=True):
+                st.file_uploader("Upload JSON for comfyui api prompt *", type=["json"], 
+                                                    key=f"create_upload_group_{group_index}", 
+                                                    help="upload JSON for comfyui output folder", accept_multiple_files=False)
+            
+                with st.container():
+                    name_col1, desc_col2 = st.columns([0.2, 0.8])
+                    with name_col1:
+                        st.text_input("Group Name *", value=group_name, placeholder="input group name",
+                                    key=f"create_group_name_{group_index}", help="Input group name")    
+
+                    with desc_col2:
+                        st.text_input("Group Description *", value="", placeholder="input group description",
+                                    key=f"create_group_description_{group_index}", help="Input app description")
+                process_group_api_json(group_index)
+                with st.container():
+                    st.markdown("Input Params:")
+                    params_inputs = st.session_state.get(f'create_prompt_inputs_{group_index}', {})
+                    params_inputs_options = list(params_inputs.keys())
+                    if f"add_input_count_{group_index}" not in st.session_state:
+                        st.session_state[f"add_input_count_{group_index}"]=3
+
+                    add_input_count = st.session_state[f"add_input_count_{group_index}"]
+                    for i in range(0,add_input_count):
+                        add_input_config_param(group_index,params_inputs_options, i, None)
+
+                    def add_more(number):
+                        st.session_state[f"add_input_count_{group_index}"]=add_input_count+number
+
+                    add_more_col1, reduce_less_col2 = st.columns([0.15, 0.85])
+                    with add_more_col1:
+                        st.button("Add More",key=f'add_more_{group_index}',on_click=lambda:add_more(1))
+                    with reduce_less_col2:
+                        st.button("Reduce Less",key=f'reduce_less_{group_index}',on_click=lambda:add_more(-1))
+
+                with st.container():
+                    st.markdown("Output Params:")
+                    params_outputs = st.session_state.get(f'create_prompt_outputs_{group_index}', {})
+                    params_outputs_options = list(params_outputs.keys())
+
+                    add_output_config_param(group_index,params_outputs_options, 0, None)
+                    
+                operation_row = row([0.3, 0.5, 0.2])
+                submit_button = operation_row.button("Submit Group", 
+                                                    key=f'create_submit_group_{group_index}', 
+                                                    type="primary",
+                                                    use_container_width=True, 
+                                                    help="Submit group params",
+                                                    on_click=lambda idx=group_index: submit_group(idx,app.id))     
+                if submit_button:
+                    submit_info = st.session_state.get(f'create_submit_group_info_{group_index}')
+                    if submit_info == 'success':
+                        st.success("Submit app successfully, back your workspace or preview this app")
+                    elif submit_info == 'exist':
+                        st.error("Submit app error, app name has existed")
+                    else:
+                        st.error(f"Submit app error, please check up app params, refer to {FAQ_URL}")
 
 def new_group_app_ui():
     logger.info("Loading create page")
@@ -568,72 +610,100 @@ def new_group_app_ui():
                 _, image_col, _ = st.columns([0.2, 0.6, 0.2])
                 with image_col:
                     st.image(image_upload, use_column_width=True, caption='ComfyUI Image with workflow info')
-    if  'create_submit_info' in st.session_state and st.session_state['create_submit_info'] == 'success':        
-        if  'create_workflow_groups' in st.session_state and st.session_state['create_workflow_groups']:
-            app_config = gen_app_config()
-            app = get_workspace_model().get_app(app_config['name'])
-            for group_index,group in enumerate(st.session_state['create_workflow_groups']):
-                group_name = group["title"]
-                with st.expander(f"Config params of group: {group_name}", expanded=True):
-                    st.file_uploader("Upload JSON for comfyui api prompt *", type=["json"], 
-                                                        key=f"create_upload_group_{group_index}", 
-                                                        help="upload JSON for comfyui output folder", accept_multiple_files=False)
-                
-                    with st.container():
-                        name_col1, desc_col2 = st.columns([0.2, 0.8])
-                        with name_col1:
-                            st.text_input("Group Name *", value=group_name, placeholder="input group name",
-                                        key=f"create_group_name_{group_index}", help="Input group name")    
+        if  'create_submit_info' in st.session_state and st.session_state['create_submit_info'] == 'success':
+            new_group_app_inputs_ui()
 
-                        with desc_col2:
-                            st.text_input("Group Description *", value="", placeholder="input group description",
-                                        key=f"create_group_description_{group_index}", help="Input app description")
-                    process_group_api_json(group_index)
-                    with st.container():
-                        st.markdown("Input Params:")
-                        params_inputs = st.session_state.get(f'create_prompt_inputs_{group_index}', {})
-                        params_inputs_options = list(params_inputs.keys())
-                        if f"add_input_count_{group_index}" not in st.session_state:
-                            st.session_state[f"add_input_count_{group_index}"]=3
+def edit_group_app_inputs_ui(app,workflow_groups):
+    for group_index,group in enumerate(workflow_groups):
+            group_name = group["name"] 
+            group_description=group["description"] 
+            group_api_conf=group["api_conf"] 
+            group_app_conf=group["app_conf"] 
 
-                        add_input_count = st.session_state[f"add_input_count_{group_index}"]
-                        for i in range(0,add_input_count):
-                            add_input_config_param(group_index,params_inputs_options, i, None)
+            with st.expander(f"Config params of group: {group_name}", expanded=True):
+                st.file_uploader("Upload JSON for comfyui api prompt *", type=["json"], 
+                                                    key=f"create_upload_group_{group_index}", 
+                                                    help="upload JSON for comfyui output folder", accept_multiple_files=False)
+            
+                with st.container():
+                    name_col1, desc_col2 = st.columns([0.2, 0.8])
+                    with name_col1:
+                        st.text_input("Group Name *", value=group_name, placeholder="input group name",
+                                    key=f"create_group_name_{group_index}", help="Input group name")    
 
-                        def add_more(number):
-                            st.session_state[f"add_input_count_{group_index}"]=add_input_count+number
+                    with desc_col2:
+                        st.text_input("Group Description *", value=group_description, placeholder="input group description",
+                                    key=f"create_group_description_{group_index}", help="Input app description")
+                process_group_api_json(group_index,group_api_conf)
+                with st.container():
+                    st.markdown("Input Params:")
 
-                        add_more_col1, reduce_less_col2 = st.columns([0.15, 0.85])
-                        with add_more_col1:
-                            st.button("Add More",key=f'add_more_{group_index}',on_click=lambda:add_more(1))
-                        with reduce_less_col2:
-                            st.button("Reduce Less",key=f'reduce_less_{group_index}',on_click=lambda:add_more(-1))
+                    params_inputs = st.session_state.get(f'create_prompt_inputs_{group_index}', {})
+                    params_inputs_options = list(params_inputs.keys())
+                    inputs_map=json.loads(group_app_conf)["inputs"]
 
-                    with st.container():
-                        st.markdown("Output Params:")
-                        params_outputs = st.session_state.get(f'create_prompt_outputs_{group_index}', {})
-                        params_outputs_options = list(params_outputs.keys())
+                    index = 0
+                    for node_id, inputs_value in inputs_map.items():
+                        for input_param_type, input_param_value in inputs_value["inputs"].items():
+                            param_name = input_param_value['name']
+                            param_help = input_param_value['help']
+                            param = {
+                            'index': f"{node_id}{NODE_SEP}{input_param_type}",
+                            'name': param_name,
+                            'help': param_help,
+                            }
+                            add_input_config_param(group_index,params_inputs_options, index, param)
+                            index += 1
+                    
+                    st.session_state[f"add_input_count_{group_index}"] = index
+                    ## add or reduce parameters on Edit will add complexity so don't implement currently        
+                    # if f"add_input_count_{group_index}" not in st.session_state:
+                    #     st.session_state[f"add_input_count_{group_index}"]=param_index+1
 
-                        add_output_config_param(group_index,params_outputs_options, 0, None)
-                        
-                    operation_row = row([0.3, 0.5, 0.2])
-                    submit_button = operation_row.button("Submit Group", 
-                                                        key=f'create_submit_group_{group_index}', 
-                                                        type="primary",
-                                                        use_container_width=True, 
-                                                        help="Submit group params",
-                                                        on_click=lambda idx=group_index: submit_group(idx,app.id))     
-                    if submit_button:
-                        submit_info = st.session_state.get(f'create_submit_group_info_{group_index}')
-                        if submit_info == 'success':
-                            st.success("Submit app successfully, back your workspace or preview this app")
-                        elif submit_info == 'exist':
-                            st.error("Submit app error, app name has existed")
-                        else:
-                            st.error(f"Submit app error, please check up app params, refer to {FAQ_URL}")
+                    # add_input_count = st.session_state[f"add_input_count_{group_index}"]
+                    # for i in range(0,add_input_count-param_index):
+                    #     add_input_config_param(group_index,params_inputs_options, i, None)
 
-                    # operation_row.empty()
-                    # next_placeholder = operation_row.empty()    
+                    # def add_more(number):
+                    #     st.session_state[f"add_input_count_{group_index}"]=add_input_count+number
+
+                    # add_more_col1, reduce_less_col2 = st.columns([0.15, 0.85])
+                    # with add_more_col1:
+                    #     st.button("Add More",key=f'add_more_{group_index}',on_click=lambda:add_more(1))
+                    # with reduce_less_col2:
+                    #     st.button("Reduce Less",key=f'reduce_less_{group_index}',on_click=lambda:add_more(-1))
+
+                with st.container():
+                    st.markdown("Output Params:")
+                    params_outputs = st.session_state.get(f'create_prompt_outputs_{group_index}', {})
+                    params_outputs_options = list(params_outputs.keys())
+                    ## out put not save any paraments, so don't implement  currently
+                    # inputs_map=json.loads(group["app_conf"])["outputs"]
+                    # node_id, outputs_value = inputs_map.items()[0]
+                    # output_param_value=outputs_value["outputs"]
+                    # param_name = output_param_value['name']
+                    # param_help = output_param_value['help']
+                    # param = {
+                    #         'index': f"{node_id}{NODE_SEP}{input_param_type}",
+                    #         'name': param_name,
+                    #         'help': param_help,
+                    #         }
+                    add_output_config_param(group_index,params_outputs_options, 0, None)
+                    
+                operation_row = row([0.3, 0.5, 0.2])
+                submit_button = operation_row.button("Submit Group", 
+                                                    key=f'create_submit_group_{group_index}', 
+                                                    type="primary",
+                                                    use_container_width=True, 
+                                                    help="Submit group params",
+                                                    on_click=lambda idx=group_index: save_group(idx,app.id))     
+                if submit_button:
+                    submit_info = st.session_state.get(f'create_save_group_info_{group_index}')
+                    if submit_info == 'success':
+                        st.success("Save group successfully, back your workspace or preview this app")
+                    else:
+                        st.error(f"Save group error, please check up app params, refer to {FAQ_URL}")
+       
 def edit_group_app_ui(app):
     logger.info("Loading create page")
     with page.stylable_button_container():
@@ -703,94 +773,13 @@ def edit_group_app_ui(app):
             _, image_col, _ = st.columns([0.2, 0.6, 0.2])
             with image_col:
                 st.image(image_upload, use_column_width=True, caption='ComfyUI Image with workflow info')
+    # group apps have been saved 
     workflow_groups=get_group_app_model().get_apps_by_template(app.id)
-    if  'create_workflow_groups' in st.session_state and st.session_state['create_workflow_groups']:
-        workflow_groups = st.session_state['create_workflow_groups']
-    for group_index,group in enumerate(workflow_groups):
-        group_name = group["name"]
-        with st.expander(f"Config params of group: {group_name}", expanded=True):
-            st.file_uploader("Upload JSON for comfyui api prompt *", type=["json"], 
-                                                key=f"create_upload_group_{group_index}", 
-                                                help="upload JSON for comfyui output folder", accept_multiple_files=False)
-        
-            with st.container():
-                name_col1, desc_col2 = st.columns([0.2, 0.8])
-                with name_col1:
-                    st.text_input("Group Name *", value=group_name, placeholder="input group name",
-                                key=f"create_group_name_{group_index}", help="Input group name")    
-
-                with desc_col2:
-                    st.text_input("Group Description *", value=group["description"], placeholder="input group description",
-                                key=f"create_group_description_{group_index}", help="Input app description")
-            process_group_api_json(group_index,group.api_conf)
-            with st.container():
-                st.markdown("Input Params:")
-
-                params_inputs = st.session_state.get(f'create_prompt_inputs_{group_index}', {})
-                params_inputs_options = list(params_inputs.keys())
-                inputs_map=json.loads(group["app_conf"])["inputs"]
-
-                index = 0
-                for node_id, inputs_value in inputs_map.items():
-                    for input_param_type, input_param_value in inputs_value["inputs"].items():
-                        param_name = input_param_value['name']
-                        param_help = input_param_value['help']
-                        param = {
-                        'index': f"{node_id}{NODE_SEP}{input_param_type}",
-                        'name': param_name,
-                        'help': param_help,
-                        }
-                        add_input_config_param(group_index,params_inputs_options, index, param)
-                        index += 1
-                
-                st.session_state[f"add_input_count_{group_index}"] = index
-                ## add or reduce parameters on Edit will add complexity so don't implement currently        
-                # if f"add_input_count_{group_index}" not in st.session_state:
-                #     st.session_state[f"add_input_count_{group_index}"]=param_index+1
-
-                # add_input_count = st.session_state[f"add_input_count_{group_index}"]
-                # for i in range(0,add_input_count-param_index):
-                #     add_input_config_param(group_index,params_inputs_options, i, None)
-
-                # def add_more(number):
-                #     st.session_state[f"add_input_count_{group_index}"]=add_input_count+number
-
-                # add_more_col1, reduce_less_col2 = st.columns([0.15, 0.85])
-                # with add_more_col1:
-                #     st.button("Add More",key=f'add_more_{group_index}',on_click=lambda:add_more(1))
-                # with reduce_less_col2:
-                #     st.button("Reduce Less",key=f'reduce_less_{group_index}',on_click=lambda:add_more(-1))
-
-            with st.container():
-                st.markdown("Output Params:")
-                params_outputs = st.session_state.get(f'create_prompt_outputs_{group_index}', {})
-                params_outputs_options = list(params_outputs.keys())
-                ## out put not save any paraments, so don't implement  currently
-                # inputs_map=json.loads(group["app_conf"])["outputs"]
-                # node_id, outputs_value = inputs_map.items()[0]
-                # output_param_value=outputs_value["outputs"]
-                # param_name = output_param_value['name']
-                # param_help = output_param_value['help']
-                # param = {
-                #         'index': f"{node_id}{NODE_SEP}{input_param_type}",
-                #         'name': param_name,
-                #         'help': param_help,
-                #         }
-                add_output_config_param(group_index,params_outputs_options, 0, None)
-                
-            operation_row = row([0.3, 0.5, 0.2])
-            submit_button = operation_row.button("Submit Group", 
-                                                key=f'create_submit_group_{group_index}', 
-                                                type="primary",
-                                                use_container_width=True, 
-                                                help="Submit group params",
-                                                on_click=lambda idx=group_index: save_group(idx,app.id))     
-            if submit_button:
-                submit_info = st.session_state.get(f'create_save_group_info_{group_index}')
-                if submit_info == 'success':
-                    st.success("Save group successfully, back your workspace or preview this app")
-                else:
-                    st.error(f"Save group error, please check up app params, refer to {FAQ_URL}")
-
-            # operation_row.empty()
-            # next_placeholder = operation_row.empty()    
+    if not workflow_groups or len(workflow_groups)==0:
+        new_group_app_inputs_ui()
+    else:
+        if 'create_workflow_groups' in st.session_state :
+            workflow_groups = st.session_state['create_workflow_groups']
+        edit_group_app_inputs_ui(app,workflow_groups)
+         
+    
