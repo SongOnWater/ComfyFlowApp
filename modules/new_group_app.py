@@ -22,6 +22,13 @@ def format_input_node_info(param,group_index):
     node_id, class_type, param_name, param_value = params_value.split(NODE_SEP)
     return f"{node_id}:{class_type}:{param_name}:{param_value}"
 
+def format_interactive_node_info(param,group_index):
+    # format {id}.{class_type}.{alias}.{param_name}
+    params_inputs = st.session_state.get(f'create_prompt_interactive_nodes_{group_index}', {})
+    params_value = params_inputs[param]
+    logger.debug(f"format_interactive_node_info, {param} {params_value}")
+    node_id, class_type,  param_value = params_value.split(NODE_SEP)
+    return f"{node_id}:{class_type}:{param_value}"
 def format_output_node_info(param,group_index):
     # format {id}.{class_type}
     params_outputs = st.session_state.get(f'create_prompt_outputs_{group_index}', {})
@@ -54,15 +61,6 @@ def parse_prompt(prompt_info, object_info_meta):
             node = prompt[node_id]
             node_inputs = []
             class_type = prompt[node_id]['class_type']
-            if class_type in INTERACTIVE_COMFYUI_CLASSTYPES:
-                option_key = f"{node_id}{NODE_SEP}{class_type}"
-                if len(node_inputs) == 0:
-                    option_value = f"{node_id}{NODE_SEP}{class_type}{NODE_SEP}None"
-                else:
-                    option_value = f"{node_id}{NODE_SEP}{class_type}{NODE_SEP}{node_inputs}"
-                interactive_nodes.update({option_key: option_value})
-                continue
-            
             for param in node['inputs']:
                 if param  not in UNSUPPORTED_COMFYUI_INPUT_KEYS:
                     param_value = node['inputs'][param]
@@ -79,7 +77,14 @@ def parse_prompt(prompt_info, object_info_meta):
                                     
                     params_inputs.update({option_key: option_value})
                     node_inputs.append(param_value)
-
+            if class_type in INTERACTIVE_COMFYUI_CLASSTYPES:
+                
+                option_key = f"{node_id}{NODE_SEP}{class_type}"
+                if len(node_inputs) == 0:
+                    option_value = f"{node_id}{NODE_SEP}{class_type}{NODE_SEP}None"
+                else:
+                    option_value = f"{node_id}{NODE_SEP}{class_type}{NODE_SEP}{node_inputs}"
+                interactive_nodes.update({option_key: option_value})
             is_output = object_info_meta[class_type]['output_node']
             if is_output:
                 # TODO: support multi output
@@ -226,7 +231,7 @@ def get_node_interactive_config(group_Index,output_param):
     output_param_value = params_outputs[output_param]
     node_id, class_type, param = output_param_value.split(NODE_SEP)
     output_param_inputs = {
-        "outputs": {
+        "interactivs": {
         }
     }
     return node_id, output_param_inputs
@@ -264,12 +269,13 @@ def gen_group_config(group_Index):
                 app_config['inputs'][input_node_id] = {"inputs": {}}
             app_config['inputs'][input_node_id]['inputs'][param] = input_param_inputs
 
-    output_param1 = st.session_state[f'group_{group_Index}_output_param_{0}']
-    output_node_id, output_param1_inputs = get_node_output_config(group_Index,output_param1)
+    output_param_0 = st.session_state[f'group_{group_Index}_output_param_{0}']
+    output_node_id, output_param1_inputs = get_node_output_config(group_Index,output_param_0)
     app_config['outputs'][output_node_id] = output_param1_inputs
 
-    # interactive_node_id, interactive_param1_inputs = get_node_interactive_config(group_Index)
-    # app_config['interactive'][interactive_node_id] = interactive_param1_inputs
+    interactive_param_0 = st.session_state[f'group_{group_Index}_interactive_param_{0}']
+    interactive_node_id, interactive_param_0_inputs = get_node_interactive_config(group_Index,interactive_param_0)
+    app_config['interactive'][interactive_node_id] = interactive_param_0_inputs
     return app_config
 def submit_app():
     app_config = gen_app_config()
@@ -307,7 +313,7 @@ def submit_app():
         logger.info(f"submit app error, {app_config['name']}")
         st.session_state['create_submit_info'] = "error"
 
-def submit_group(group_index,id):
+def submit_group(group_index,app):
     app_config = gen_group_config(group_index)
     if app_config:
         # check user login
@@ -329,7 +335,7 @@ def submit_group(group_index,id):
             app['api_conf'] = st.session_state[f'create_prompt_{group_index}']
             app['workflow_conf'] = json.dumps(st.session_state['create_workflow'])
             app['status'] = 'created'
-            app['template'] = id
+            app['template'] = app.id
             app['image'] = img_bytesio.getvalue()
             app['username'] = st.session_state['username']
             get_group_app_model().create_app(app)
@@ -419,6 +425,24 @@ def add_input_config_param(group_index,params_inputs_options, index, input_param
     param_input_row.text_input("App Input Description", value=input_param['help'], placeholder="Param Description",
                                 key=f"group_{group_index}_input_param_{index}_desc", help="Input param description")
     
+def add_interactive_config_param(group_index,params_interactive_options, index, interactive_param):
+    if not interactive_param:
+        interactive_param = {
+            'name': None,
+            'help': None,
+        }
+        option_index = None
+    else:
+        option_index = params_interactive_options.index(interactive_param['index'])
+
+    param_input_row = row([0.4, 0.2, 0.4], vertical_align="bottom")
+    param_input_row.selectbox("Select input of workflow *", options=params_interactive_options, key=f"group_{group_index}_interactive_param_{index}", 
+                            index=option_index,format_func=lambda param:format_interactive_node_info(param,group_index), help="Select a param from workflow")
+    param_input_row.text_input("App Input Name *", placeholder="Interactive Name", key=f"group_{group_index}_interactive_param_{index}_name", 
+                               value=interactive_param['name'], help="Input param name")
+    param_input_row.text_input("App Input Description", value=interactive_param['help'], placeholder="Interactive Description",
+                                key=f"group_{group_index}_interactive_param_{index}_desc", help="Interactive param description")
+        
 def add_output_config_param(group_index,params_outputs_options, index, output_param):
     if not output_param:
         output_param = {
@@ -472,11 +496,14 @@ def process_group_api_json(index,api_conf=None):
         except json.JSONDecodeError:
             st.error("The uploaded file is not a valid JSON")
             st.session_state['create_prompt'] = None
+            st.session_state[f'create_prompt_interactive_nodes_{index}'] = None
         except Exception as e:
             st.error(f"An error occurred while processing the workflow: {str(e)}")
             st.session_state['create_prompt'] = None
+            st.session_state[f'create_prompt_interactive_nodes_{index}'] = None
     else:
         st.session_state['create_prompt'] = None
+        st.session_state[f'create_prompt_interactive_nodes_{index}'] = None
 
 def new_group_app_inputs_ui():      
     if  'create_workflow_groups' in st.session_state and st.session_state['create_workflow_groups']:
@@ -520,6 +547,30 @@ def new_group_app_inputs_ui():
                         st.button("Reduce Less",key=f'reduce_less_{group_index}',on_click=lambda:add_more(-1))
 
                 with st.container():
+                    params_interactive = st.session_state.get(f'create_prompt_interactive_nodes_{group_index}', {})
+                   
+                    if params_interactive and len(params_interactive)>0:
+                        st.markdown("Interactive Params:")
+                        params_interactive_options = list(params_interactive.keys())
+
+                        if f"add_interactive_count_{group_index}" not in st.session_state:
+                            st.session_state[f"add_interactive_count_{group_index}"]=1
+
+                        add_interactive_count = st.session_state[f"add_interactive_count_{group_index}"]
+
+                        for i in range(0,add_interactive_count):
+                            add_interactive_config_param(group_index,params_interactive_options, i, None)
+
+                        def add_more_interactive(number):
+                            st.session_state[f"add_interactive_count_{group_index}"]=add_interactive_count+number
+
+                        add_more_col1, reduce_less_col2 = st.columns([0.15, 0.85])
+                        with add_more_col1:
+                            st.button("Add More",key=f'add_more_interactive{group_index}',on_click=lambda:add_more_interactive(1))
+                        with reduce_less_col2:
+                            st.button("Reduce Less",key=f'reduce_less_interactive{group_index}',on_click=lambda:add_more_interactive(-1))
+
+                with st.container():
                     st.markdown("Output Params:")
                     params_outputs = st.session_state.get(f'create_prompt_outputs_{group_index}', {})
                     params_outputs_options = list(params_outputs.keys())
@@ -532,7 +583,7 @@ def new_group_app_inputs_ui():
                                                     type="primary",
                                                     use_container_width=True, 
                                                     help="Submit group params",
-                                                    on_click=lambda idx=group_index: submit_group(idx,app.id))     
+                                                    on_click=lambda idx=group_index: submit_group(idx,app))     
                 if submit_button:
                     submit_info = st.session_state.get(f'create_submit_group_info_{group_index}')
                     if submit_info == 'success':
