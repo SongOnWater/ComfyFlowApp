@@ -538,14 +538,15 @@ def new_group_app_inputs_ui():
                     for i in range(0,add_input_count):
                         add_input_config_param(group_index,params_inputs_options, i, None)
 
-                    def add_more(number):
-                        st.session_state[f"add_input_count_{group_index}"]=add_input_count+number
+                    def add_more(group_index,number):
+                        input_count=st.session_state[f"add_input_count_{group_index}"]
+                        st.session_state[f"add_input_count_{group_index}"]=(input_count+number)
 
                     add_more_col1, reduce_less_col2 = st.columns([0.15, 0.85])
                     with add_more_col1:
-                        st.button("Add More",key=f'add_more_{group_index}',on_click=lambda:add_more(1))
+                        st.button("Add More",key=f'add_more_{group_index}',on_click=lambda idx=group_index:add_more(idx,1))
                     with reduce_less_col2:
-                        st.button("Reduce Less",key=f'reduce_less_{group_index}',on_click=lambda:add_more(-1))
+                        st.button("Reduce Less",key=f'reduce_less_{group_index}',on_click=lambda idx=group_index:add_more(idx,-1))
 
                 with st.container():
                     params_interactive = st.session_state.get(f'create_prompt_interactive_nodes_{group_index}', {})
@@ -562,14 +563,14 @@ def new_group_app_inputs_ui():
                         for i in range(0,add_interactive_count):
                             add_interactive_config_param(group_index,params_interactive_options, i, None)
 
-                        def add_more_interactive(number):
+                        def add_more_interactive(group_index,number):
                             st.session_state[f"add_interactive_count_{group_index}"]=add_interactive_count+number
 
                         add_more_col1, reduce_less_col2 = st.columns([0.15, 0.85])
                         with add_more_col1:
-                            st.button("Add More",key=f'add_more_interactive{group_index}',on_click=lambda:add_more_interactive(1))
+                            st.button("Add More",key=f'add_more_interactive{group_index}',on_click=lambda idx=group_index:add_more_interactive(idx,1))
                         with reduce_less_col2:
-                            st.button("Reduce Less",key=f'reduce_less_interactive{group_index}',on_click=lambda:add_more_interactive(-1))
+                            st.button("Reduce Less",key=f'reduce_less_interactive{group_index}',on_click=lambda idx=group_index:add_more_interactive(idx,-1))
 
                 with st.container():
                     st.markdown("Output Params:")
@@ -832,7 +833,8 @@ def edit_group_app_ui(app):
         new_group_app_inputs_ui()
     else:
         if 'create_workflow_groups' in st.session_state and st.session_state['create_workflow_groups']:
-            workflow_groups = st.session_state['create_workflow_groups']
-        edit_group_app_inputs_ui(app,workflow_groups)
+             new_group_app_inputs_ui()
+        else:
+            edit_group_app_inputs_ui(app,workflow_groups)
          
     
