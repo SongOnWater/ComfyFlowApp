@@ -142,6 +142,8 @@ class ComfyClient:
                     elif msg_type == "execution_cached":
                         # Dispatch execution_cached event with msg["data"]
                         dispatch_event(queue, {"type": "execution_cached", "data": msg["data"]})
+                    elif msg_type == "reverse-image-choose":
+                        dispatch_event(queue, {"type": "reverse-image-choose", "data": msg["data"]})
                     else:
                         logger.warning(f"Unknown message type {msg_type}")
                     
@@ -169,3 +171,10 @@ class ComfyClient:
             except Exception as e:
                 logger.error(f"Error while processing websocket message, {e}")
                 raise e
+            
+    def send_selected_repeated_indices(self,node_id, message):
+        p = {'message': message, 'id': node_id}
+        resp = requests.post(f"{self.server_addr}/reverse/image_chooser_message", data=p,params=p,json=p)
+        if resp.status_code != 200:
+            raise Exception(f"Failed to send selected images to server, {resp.status_code}")
+        return resp.json()

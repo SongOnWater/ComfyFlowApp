@@ -1,3 +1,4 @@
+import math
 from typing import Any
 import random
 import json
@@ -8,6 +9,8 @@ import queue
 
 import streamlit as st
 from streamlit_extras.row import row
+import urllib.parse
+from st_clickable_images import clickable_images
 from modules.page import custom_text_area
 from streamlit_drawable_canvas import st_canvas
 import numpy as np
@@ -313,6 +316,46 @@ class Comfyflow:
                     # show video preview
                     st.video(uploaded_file, format="video/mp4", start_time=0)
 
+    def create_interactive_ui(self,img_placeholder):
+        img_urls=st.session_state["filtered_images"]
+        img_urls_count=len(img_urls)
+        col_count=5
+        columns = st.columns(col_count)
+        with img_placeholder.container():
+            # Initialize session state if not already done
+            if 'select_states' not in st.session_state:
+                st.session_state['select_states'] = [False] * img_urls_count
+            if 'repeat_values' not in st.session_state:
+                st.session_state['repeat_values'] = [1] * img_urls_count
+            def on_checkbox_change(index):
+                    st.session_state['select_states'][index]= st.session_state[f"select_{index}"]
+            def on_number_input_change(index):
+                st.session_state['repeat_values'][index] = st.session_state[f"repeat_{index}"]
+
+
+            for img_index,img_url in enumerate(img_urls):
+                with columns[img_index%col_count]:
+                    st.image(img_url,width=80,use_column_width='auto',caption=f"img_{img_index}")
+                    with st.container():
+                        st.checkbox("Select",key=f"select_{img_index}",on_change= lambda idx=img_index:on_checkbox_change(idx))
+                        st.number_input("Repeat",min_value=1, max_value=100, value=1, step=1,key=f"repeat_{img_index}",on_change= lambda idx=img_index:on_number_input_change(idx))
+                        
+
+            def process_selected():
+                repeated_indices=[]
+                for  image_index in range(len(img_urls)):
+                    is_selected=st.session_state['select_states'][image_index]
+                    repeat_time=st.session_state['repeat_values'][image_index]
+                    if is_selected :
+                            repeated_indices.extend([image_index] * repeat_time)
+                repeated_indices.append(-1)
+                node_id=st.session_state["node_id"]
+                repeated_indices_str = ','.join(map(str, repeated_indices))
+                self.comfy_client.send_selected_repeated_indices(node_id,repeated_indices_str)
+        st.button("Process Selected",on_click=process_selected)
+
+     
+
     def create_ui(self, show_header=True):      
         logger.info("Creating UI")  
 
@@ -348,12 +391,7 @@ class Comfyflow:
                 output_queue_remaining = st.text(f"Queue: {queue_remaining}")
                 progress_placeholder = st.empty()
                 img_placeholder = st.empty()
-                if gen_button:
-                    if st.session_state['preview_prompt_id'] is None:
-                        st.warning("Generate failed, please check ComfyFlowApp and ComfyUI console log.")
-                        st.stop()
-
-                    # update progress
+                if st.session_state.get("preview_prompt_id",None):# update progress
                     output_progress = progress_placeholder.progress(value=0.0, text="Generate image")
                     while True:
                         try:
@@ -388,10 +426,32 @@ class Comfyflow:
                             elif event_type == 'b_preview':
                                 preview_image = event['data']
                                 img_placeholder.image(preview_image, use_column_width=True, caption="Preview")
+                            elif event_type == "reverse-image-choose":
+                                data = event['data']
+                                node_id = data["id"]
+                                urls = data["urls"]
+                                def get_image_url(url):
+                                    base_url = "/view"
+                                    query_string = urllib.parse.urlencode(url)
+                                    full_url=f"{self.comfy_client.server_addr}{base_url}?{query_string}"
+                                    logger.info(f"image:{full_url}")
+                                    return  full_url
+                                
+                                
+                                img_urls = [get_image_url(url) for url in urls]
+                                st.session_state["filtered_images"]=img_urls
+                                st.session_state["node_id"]=node_id
+                                self.create_interactive_ui(img_placeholder)
+
+                               
+                    
                         except Exception as e:
                             logger.warning(f"get progress exception, {e}")
                             # st.warning(f"get progress exception {e}")
                 else:
-                    output_image = Image.open('./public/images/output-none.png')
-                    logger.info("default output")
-                    img_placeholder.image(output_image, use_column_width=True, caption='None Image, Generate it!')
+                    if  st.session_state.get("filtered_images",None):
+                        self.create_interactive_ui(img_placeholder)
+                    else:
+                        output_image = Image.open('./public/images/output-none.png')
+                        logger.info("default output")
+                        img_placeholder.image(output_image, use_column_width=True, caption='None Image, Generate it!')

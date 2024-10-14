@@ -222,6 +222,8 @@ def get_node_output_config(group_Index,output_param):
     node_id, class_type, param = output_param_value.split(NODE_SEP)
     output_param_inputs = {
         "outputs": {
+            "class_type":class_type,
+            "param":param 
         }
     }
     return node_id, output_param_inputs
@@ -232,6 +234,8 @@ def get_node_interactive_config(group_Index,output_param):
     node_id, class_type, param = output_param_value.split(NODE_SEP)
     output_param_inputs = {
         "interactivs": {
+            "class_type":class_type,
+            "param":param            
         }
     }
     return node_id, output_param_inputs
@@ -663,8 +667,8 @@ def new_group_app_ui():
                 _, image_col, _ = st.columns([0.2, 0.6, 0.2])
                 with image_col:
                     st.image(image_upload, use_column_width=True, caption='ComfyUI Image with workflow info')
-        if  'create_submit_info' in st.session_state and st.session_state['create_submit_info'] == 'success':
-            new_group_app_inputs_ui()
+    if  'create_submit_info' in st.session_state and st.session_state['create_submit_info'] == 'success':
+        new_group_app_inputs_ui()
 
 def edit_group_app_inputs_ui(app,workflow_groups):
     if workflow_groups:
