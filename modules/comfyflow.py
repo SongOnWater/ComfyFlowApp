@@ -131,8 +131,13 @@ class Comfyflow:
                 for image in node_output['images']:
                     # image_url = self.comfy_client.get_image_url(image['filename'], image['subfolder'], image['type'])
                     # images_output.append(image_url)
-                    image_data = self.comfy_client.get_image(image['filename'], image['subfolder'], image['type'])
-                    images_output.append(image_data)
+                    try:
+                        image_data = self.comfy_client.get_image(image['filename'], image['subfolder'], image['type'])
+                        images_output.append(image_data)
+                    except Exception as e:
+                         logger.info(f"Got images fail, {e}")
+                        
+
                     
                 logger.info(f"Got images from server, {node_id}, {len(images_output)}")
                 return 'images', images_output
@@ -315,6 +320,9 @@ class Comfyflow:
 
                     # show video preview
                     st.video(uploaded_file, format="video/mp4", start_time=0)
+                else:
+                    st.session_state["filtered_images"]=None
+                    st.session_state["progress"]=0.0
 
     def create_interactive_ui(self,img_placeholder):
         img_urls=st.session_state["filtered_images"]
@@ -341,7 +349,7 @@ class Comfyflow:
                         st.number_input("Repeat",min_value=1, max_value=100, value=1, step=1,key=f"repeat_{img_index}",on_change= lambda idx=img_index:on_number_input_change(idx))
                         
 
-            def process_selected():
+            def process_selected(img_urls):
                 repeated_indices=[]
                 for  image_index in range(len(img_urls)):
                     is_selected=st.session_state['select_states'][image_index]
@@ -351,10 +359,16 @@ class Comfyflow:
                 repeated_indices.append(-1)
                 node_id=st.session_state["node_id"]
                 repeated_indices_str = ','.join(map(str, repeated_indices))
-                self.comfy_client.send_selected_repeated_indices(node_id,repeated_indices_str)
-        st.button("Process Selected",on_click=process_selected)
 
-     
+                self.comfy_client.send_selected_repeated_indices(node_id,repeated_indices_str)
+                st.session_state['processing_selecte'] = True
+                st.session_state['filtered_images'] = None
+                
+
+        st.button("Process Selected",on_click=process_selected,args=(img_urls,))
+        
+
+
 
     def create_ui(self, show_header=True):      
         logger.info("Creating UI")  
@@ -391,67 +405,86 @@ class Comfyflow:
                 output_queue_remaining = st.text(f"Queue: {queue_remaining}")
                 progress_placeholder = st.empty()
                 img_placeholder = st.empty()
-                if st.session_state.get("preview_prompt_id",None):# update progress
-                    output_progress = progress_placeholder.progress(value=0.0, text="Generate image")
-                    while True:
-                        try:
-                            progress_queue = st.session_state.get('progress_queue')
-                            event = progress_queue.get()
-                            logger.debug(f"event: {event}")
-
-                            event_type = event['type']
-                            if event_type == 'status':
-                                remaining = event['data']['exec_info']['queue_remaining']
-                                output_queue_remaining.text(f"Queue: {remaining}")
-                            elif event_type == 'execution_cached':
-                                executed_nodes.extend(event['data']['nodes'])
-                                output_progress.progress(len(executed_nodes)/node_size, text="Generate image...")
-                            elif event_type == 'executing':
-                                node = event['data']
-                                if node is None:
-                                    type, outputs = self.get_outputs()
-                                    if type == 'images' and outputs is not None:
-                                        img_placeholder.image(outputs, use_column_width=True)
-                                    elif type == 'gifs' and outputs is not None:
-                                        for output in outputs:
-                                            img_placeholder.markdown(f'<iframe src="{output}" width="100%" height="360px"></iframe>', unsafe_allow_html=True)
-
-                                    output_progress.progress(1.0, text="Generate finished")
-                                    logger.info("Generating finished")
-                                    st.session_state[f'{app_name}_previewed'] = True
-                                    break
-                                else:
-                                    executed_nodes.append(node)
-                                    output_progress.progress(len(executed_nodes)/node_size, text="Generating image...")
-                            elif event_type == 'b_preview':
-                                preview_image = event['data']
-                                img_placeholder.image(preview_image, use_column_width=True, caption="Preview")
-                            elif event_type == "reverse-image-choose":
-                                data = event['data']
-                                node_id = data["id"]
-                                urls = data["urls"]
-                                def get_image_url(url):
-                                    base_url = "/view"
-                                    query_string = urllib.parse.urlencode(url)
-                                    full_url=f"{self.comfy_client.server_addr}{base_url}?{query_string}"
-                                    logger.info(f"image:{full_url}")
-                                    return  full_url
-                                
-                                
-                                img_urls = [get_image_url(url) for url in urls]
-                                st.session_state["filtered_images"]=img_urls
-                                st.session_state["node_id"]=node_id
-                                self.create_interactive_ui(img_placeholder)
-
-                               
+                if st.session_state.get("preview_prompt_id",None):
+                    # update progress
+                    progress=st.session_state.get("progress",0.0)
+                    output_progress = progress_placeholder.progress(value=progress, text="Generate image")
+                   
+                    if st.session_state.get("filtered_images",None):
+                       self.create_interactive_ui(img_placeholder)
                     
-                        except Exception as e:
-                            logger.warning(f"get progress exception, {e}")
-                            # st.warning(f"get progress exception {e}")
+                    if gen_button or st.session_state.get("processing_selecte",False):
+                        while True:
+                            try:
+                                progress_queue = st.session_state.get('progress_queue')
+                                event = progress_queue.get()
+                                logger.info(f"event: {event}")
+
+                                event_type = event['type']
+                                if event_type == 'status':
+                                    remaining = event['data']['exec_info']['queue_remaining']
+                                    #st.session_state["remaining"]=remaining
+                                    output_queue_remaining.text(f"Queue: {remaining}")
+                                elif event_type == 'execution_cached':
+                                    executed_nodes.extend(event['data']['nodes'])
+                                    progress=len(executed_nodes)/node_size
+                                    st.session_state["progress"]=progress
+                                    output_progress.progress(progress, text="Generate image...")
+                                elif event_type == 'executing':
+                                    node = event['data']
+                                    if node is None:
+                                        type, outputs = self.get_outputs()
+                                        if type == 'images' and outputs is not None:
+                                            
+                                            img_placeholder.image(outputs, use_column_width=True)
+                                        elif type == 'gifs' and outputs is not None:
+                                            for output in outputs:
+                                                img_placeholder.markdown(f'<iframe src="{output}" width="100%" height="360px"></iframe>', unsafe_allow_html=True)
+
+                                        output_progress.progress(1.0, text="Generate finished")
+                                        logger.info("Generating finished")
+                                        
+                                        st.session_state['preview_prompt_id'] = None
+                                        st.session_state[f'{app_name}_previewed'] = True
+                                        break
+                                    else:
+                                        executed_nodes.append(node)
+                                        progress=len(executed_nodes)/node_size
+                                        st.session_state["progress"]=progress
+                                        output_progress.progress(len(executed_nodes)/node_size, text="Generating image...")
+                                elif event_type == 'b_preview':
+                                    preview_image = event['data']
+                                    img_placeholder.image(preview_image, use_column_width=True, caption="Preview")
+                                elif event_type == "reverse-image-choose":
+                                    logger.info(f"reverse-image-choose")
+                                    data = event['data']
+                                    node_id = data["id"]
+                                    urls = data["urls"]
+                                    def get_image_url(url):
+                                        base_url = "/view"
+                                        query_string = urllib.parse.urlencode(url)
+                                        full_url=f"{self.comfy_client.server_addr}{base_url}?{query_string}"
+                                        logger.info(f"image:{full_url}")
+                                        return  full_url
+                                    
+
+                                    img_urls = [get_image_url(url) for url in urls]
+                                    st.session_state["filtered_images"]=img_urls
+                                    st.session_state["node_id"]=node_id
+                                    self.create_interactive_ui(img_placeholder)
+                                    st.stop()
+                                elif event_type == "execution_success":
+                                    data = event['data']
+                                    # if pro_btn:
+                                    #     st.session_state['filtered_images'] = None
+                                    #     img_placeholder.empty()
+
+                                    # st.session_state['preview_prompt_id'] = None
+                            except Exception as e:
+                                logger.warning(f"get progress exception, {e}")
+                                break
+                                # st.warning(f"get progress exception {e}")
                 else:
-                    if  st.session_state.get("filtered_images",None):
-                        self.create_interactive_ui(img_placeholder)
-                    else:
-                        output_image = Image.open('./public/images/output-none.png')
-                        logger.info("default output")
-                        img_placeholder.image(output_image, use_column_width=True, caption='None Image, Generate it!')
+                    output_image = Image.open('./public/images/output-none.png')
+                    logger.info("default output")
+                    img_placeholder.image(output_image, use_column_width=True, caption='None Image, Generate it!')
