@@ -1,4 +1,5 @@
 import math
+import traceback
 from typing import Any
 import random
 import json
@@ -15,6 +16,7 @@ from modules.page import custom_text_area
 from streamlit_drawable_canvas import st_canvas
 import numpy as np
 import io
+from streamlit_extras.grid import grid
 
 class ImageFile:
     def __init__(self, name, byte_array, mime_type):
@@ -323,12 +325,13 @@ class Comfyflow:
                 else:
                     st.session_state["filtered_images"]=None
                     st.session_state["progress"]=0.0
+                    #st.session_state['preview_prompt_id'] = None
 
     def create_interactive_ui(self,img_placeholder):
         img_urls=st.session_state["filtered_images"]
         img_urls_count=len(img_urls)
-        col_count=5
-        columns = st.columns(col_count)
+        col_count=5 if 5<img_urls_count else img_urls_count
+        
         with img_placeholder.container():
             # Initialize session state if not already done
             if 'select_states' not in st.session_state:
@@ -340,13 +343,43 @@ class Comfyflow:
             def on_number_input_change(index):
                 st.session_state['repeat_values'][index] = st.session_state[f"repeat_{index}"]
 
-
+            columns = st.columns(col_count)                 
             for img_index,img_url in enumerate(img_urls):
                 with columns[img_index%col_count]:
                     st.image(img_url,width=80,use_column_width='auto',caption=f"img_{img_index}")
                     with st.container():
                         st.checkbox("Select",key=f"select_{img_index}",on_change= lambda idx=img_index:on_checkbox_change(idx))
                         st.number_input("Repeat",min_value=1, max_value=100, value=1, step=1,key=f"repeat_{img_index}",on_change= lambda idx=img_index:on_number_input_change(idx))
+            
+            
+            # row_count=math.ceil(img_urls_count/col_count)
+            # grid_arrangement=[]
+            # for row_index in range(row_count):
+            #         grid_arrangement.append([1]*col_count)
+            #         grid_arrangement.append([1,3]*col_count)
+
+            # logger.info(f"img_urls_count:{img_urls_count}")
+            # logger.info(f"grid_arrangement:{grid_arrangement}")
+            # my_grid=grid(*grid_arrangement,vertical_align="center")
+
+            # for row_index,row_arrange in enumerate(grid_arrangement):
+            #     arrange_col_count= len(row_arrange)
+            #     if arrange_col_count== col_count:
+            #         for col_index in range(col_count):
+            #              img_index=int(row_index/2)*col_count+col_index
+            #              logger.info(f"image index:{img_index},in row:{row_index},col:{col_index}")
+            #              img_url=img_urls[img_index]
+            #              my_grid.image(img_url,width=100,caption=f"img_{img_index}")
+            #     elif arrange_col_count== 2*col_count:
+            #         for col_index in range(col_count):
+            #              img_index=int(row_index/2) *col_count+col_index
+            #              logger.info(f"cb and ni index:{img_index},in row:{row_index},col:{col_index}")
+            #              my_grid.checkbox("S",key=f"select_{img_index}",on_change= lambda idx=img_index:on_checkbox_change(idx))
+            #              my_grid.number_input("R",min_value=1, max_value=100, value=1, step=1,key=f"repeat_{img_index}",on_change= lambda idx=img_index:on_number_input_change(idx))
+
+
+           
+
                         
 
             def process_selected(img_urls):
@@ -482,6 +515,7 @@ class Comfyflow:
                                     # st.session_state['preview_prompt_id'] = None
                             except Exception as e:
                                 logger.warning(f"get progress exception, {e}")
+                                logger.error(f"Stack trace:\n{traceback.format_exc()}")
                                 break
                                 # st.warning(f"get progress exception {e}")
                 else:
