@@ -110,18 +110,18 @@ class Comfyflow:
                                 return
                             
             logger.info(f"Sending prompt to server, {prompt}")
-            queue = st.session_state.get('progress_queue', None)
+            queue = st.session_state.get(f'progress_queue_{self.app.id}', None)
             try:
                 prompt_id = self.comfy_client.gen_images(prompt, queue)
-                st.session_state['preview_prompt_id'] = prompt_id
+                st.session_state[f'preview_prompt_id_{self.app.id}'] = prompt_id
                 logger.info(f"generate prompt id: {prompt_id}")
             except Exception as e:
-                st.session_state['preview_prompt_id'] = None
+                st.session_state[f'preview_prompt_id_{self.app.id}'] = None
                 logger.warning(f"generate prompt error, {e}")
 
     def get_outputs(self):
         # get output images by prompt_id
-        prompt_id = st.session_state['preview_prompt_id']
+        prompt_id = st.session_state[f'preview_prompt_id_{self.app.id}']
         if prompt_id is None:
             return None
         history = self.comfy_client.get_history(prompt_id)[prompt_id]
@@ -138,8 +138,6 @@ class Comfyflow:
                         images_output.append(image_data)
                     except Exception as e:
                          logger.info(f"Got images fail, {e}")
-                        
-
                     
                 logger.info(f"Got images from server, {node_id}, {len(images_output)}")
                 return 'images', images_output
@@ -323,33 +321,53 @@ class Comfyflow:
                     # show video preview
                     st.video(uploaded_file, format="video/mp4", start_time=0)
                 else:
-                    st.session_state["filtered_images"]=None
-                    st.session_state["progress"]=0.0
+                    st.session_state[f"filtered_images_{self.app.id}"]=None
+                    st.session_state[f"progress_{self.app.id}"]=0.0
+                    #st.session_state['preview_prompt_id'] = None
+            elif param_type == 'UPLOADIMAGES':
+                param_name = param_node['name']
+                param_help = param_node['help']
+                param_subfolder = param_node.get('subfolder', '')
+                param_key = f"{node_id}_{param_name}"
+                uploaded_files = st.file_uploader(param_name, help=param_help, key=param_key, type=['png', 'jpg', 'jpeg'], accept_multiple_files=True)
+                if uploaded_files is not None and len(uploaded_files)>0:
+                    for uploaded_file in uploaded_files:
+                        logger.info(f"uploading images, {uploaded_file}")
+                        # upload to server
+                        upload_type = "input"
+                        imagefile = {'image': (uploaded_file.name, uploaded_file)}  # 替换为要上传的文件名和路径
+                        self.comfy_client.upload_image(imagefile, param_subfolder, upload_type, 'true')
+
+                        # show video preview
+                        #st.video(uploaded_file, format="video/mp4", start_time=0)
+                # else:
+                    # st.session_state["filtered_images"]=None
+                    # st.session_state["progress"]=0.0
                     #st.session_state['preview_prompt_id'] = None
 
     def create_interactive_ui(self,img_placeholder):
-        img_urls=st.session_state["filtered_images"]
+        img_urls=st.session_state[f"filtered_images_{self.app.id}"]
         img_urls_count=len(img_urls)
         col_count=5 if 5<img_urls_count else img_urls_count
         
         with img_placeholder.container():
             # Initialize session state if not already done
-            if 'select_states' not in st.session_state:
-                st.session_state['select_states'] = [False] * img_urls_count
-            if 'repeat_values' not in st.session_state:
-                st.session_state['repeat_values'] = [1] * img_urls_count
+            if f'app_{self.app.id}_select_states' not in st.session_state:
+                st.session_state[f'app_{self.app.id}_select_states'] = [False] * img_urls_count
+            if f'app_{self.app.id}_repeat_values' not in st.session_state:
+                st.session_state[f'app_{self.app.id}_repeat_values'] = [1] * img_urls_count
             def on_checkbox_change(index):
-                    st.session_state['select_states'][index]= st.session_state[f"select_{index}"]
+                    st.session_state[f'app_{self.app.id}_select_states'][index]= st.session_state[f"app_{self.app.id}_select_{index}"]
             def on_number_input_change(index):
-                st.session_state['repeat_values'][index] = st.session_state[f"repeat_{index}"]
+                st.session_state[f'app_{self.app.id}_repeat_values'][index] = st.session_state[f"app_{self.app.id}_repeat_{index}"]
 
             columns = st.columns(col_count)                 
             for img_index,img_url in enumerate(img_urls):
                 with columns[img_index%col_count]:
                     st.image(img_url,width=80,use_column_width='auto',caption=f"img_{img_index}")
                     with st.container():
-                        st.checkbox("Select",key=f"select_{img_index}",on_change= lambda idx=img_index:on_checkbox_change(idx))
-                        st.number_input("Repeat",min_value=1, max_value=100, value=1, step=1,key=f"repeat_{img_index}",on_change= lambda idx=img_index:on_number_input_change(idx))
+                        st.checkbox("Select",key=f"app_{self.app.id}_select_{img_index}",on_change= lambda idx=img_index:on_checkbox_change(idx))
+                        st.number_input("Repeat",min_value=1, max_value=100, value=1, step=1,key=f"app_{self.app.id}_repeat_{img_index}",on_change= lambda idx=img_index:on_number_input_change(idx))
             
             
             # row_count=math.ceil(img_urls_count/col_count)
@@ -385,29 +403,37 @@ class Comfyflow:
             def process_selected(img_urls):
                 repeated_indices=[]
                 for  image_index in range(len(img_urls)):
-                    is_selected=st.session_state['select_states'][image_index]
-                    repeat_time=st.session_state['repeat_values'][image_index]
+                    is_selected=st.session_state[f'app_{self.app.id}_select_states'][image_index]
+                    repeat_time=st.session_state[f'app_{self.app.id}_repeat_values'][image_index]
                     if is_selected :
                             repeated_indices.extend([image_index] * repeat_time)
                 repeated_indices.append(-1)
-                node_id=st.session_state["node_id"]
+                node_id=st.session_state[f"node_id_{self.app.id}"]
                 repeated_indices_str = ','.join(map(str, repeated_indices))
 
                 self.comfy_client.send_selected_repeated_indices(node_id,repeated_indices_str)
-                st.session_state['processing_selecte'] = True
-                st.session_state['filtered_images'] = None
+                st.session_state[f'processing_selecte_{self.app.id}'] = True
+                st.session_state[f"filtered_images_{self.app.id}"] = None
                 
 
         st.button("Process Selected",on_click=process_selected,args=(img_urls,))
         
+    def create_result_ui(self,img_placeholder):
+        outputs = st.session_state[f"result_images_{self.app.id}"]
+        width = None
+        use_column_width=True
+        if len(outputs)>1:
+            width=100
+            use_column_width=False
+        img_placeholder.image(outputs,width=width, use_column_width=use_column_width)
 
 
 
     def create_ui(self, show_header=True):      
         logger.info("Creating UI")  
 
-        if 'progress_queue' not in st.session_state:   
-            st.session_state['progress_queue'] = queue.Queue()
+        if f'progress_queue_{self.app.id}' not in st.session_state:   
+            st.session_state[f'progress_queue_{self.app.id}'] = queue.Queue()
         
         app_name = self.app.name 
         app_description = self.app.description 
@@ -438,18 +464,20 @@ class Comfyflow:
                 output_queue_remaining = st.text(f"Queue: {queue_remaining}")
                 progress_placeholder = st.empty()
                 img_placeholder = st.empty()
-                if st.session_state.get("preview_prompt_id",None):
+                if st.session_state.get(f'preview_prompt_id_{self.app.id}',None):
                     # update progress
-                    progress=st.session_state.get("progress",0.0)
+                    progress=st.session_state.get(f"progress_{self.app.id}",0.0)
                     output_progress = progress_placeholder.progress(value=progress, text="Generate image")
                    
-                    if st.session_state.get("filtered_images",None):
+                    if st.session_state.get(f"filtered_images_{self.app.id}",None):
                        self.create_interactive_ui(img_placeholder)
+                    if  st.session_state.get(f"result_images_{self.app.id}",None):
+                        self.create_result_ui(img_placeholder)
                     
-                    if gen_button or st.session_state.get("processing_selecte",False):
+                    if gen_button or st.session_state.get(f'processing_selecte_{self.app.id}',False):
                         while True:
                             try:
-                                progress_queue = st.session_state.get('progress_queue')
+                                progress_queue = st.session_state.get(f'progress_queue_{self.app.id}')
                                 event = progress_queue.get()
                                 logger.info(f"event: {event}")
 
@@ -461,15 +489,15 @@ class Comfyflow:
                                 elif event_type == 'execution_cached':
                                     executed_nodes.extend(event['data']['nodes'])
                                     progress=len(executed_nodes)/node_size
-                                    st.session_state["progress"]=progress
+                                    st.session_state[f"progress_{self.app.id}"]=progress
                                     output_progress.progress(progress, text="Generate image...")
                                 elif event_type == 'executing':
                                     node = event['data']
                                     if node is None:
                                         type, outputs = self.get_outputs()
                                         if type == 'images' and outputs is not None:
-                                            
-                                            img_placeholder.image(outputs, use_column_width=True)
+                                            st.session_state[f"result_images_{self.app.id}"]=outputs
+                                            self.create_result_ui(img_placeholder)
                                         elif type == 'gifs' and outputs is not None:
                                             for output in outputs:
                                                 img_placeholder.markdown(f'<iframe src="{output}" width="100%" height="360px"></iframe>', unsafe_allow_html=True)
@@ -477,13 +505,13 @@ class Comfyflow:
                                         output_progress.progress(1.0, text="Generate finished")
                                         logger.info("Generating finished")
                                         
-                                        st.session_state['preview_prompt_id'] = None
+                                        # st.session_state[f'preview_prompt_id_{self.app.id}'] = None
                                         st.session_state[f'{app_name}_previewed'] = True
                                         break
                                     else:
                                         executed_nodes.append(node)
                                         progress=len(executed_nodes)/node_size
-                                        st.session_state["progress"]=progress
+                                        st.session_state[f"progress_{self.app.id}"]=progress
                                         output_progress.progress(len(executed_nodes)/node_size, text="Generating image...")
                                 elif event_type == 'b_preview':
                                     preview_image = event['data']
@@ -497,15 +525,13 @@ class Comfyflow:
                                         base_url = "/view"
                                         query_string = urllib.parse.urlencode(url)
                                         full_url=f"{self.comfy_client.server_addr}{base_url}?{query_string}"
-                                        logger.info(f"image:{full_url}")
                                         return  full_url
                                     
 
                                     img_urls = [get_image_url(url) for url in urls]
-                                    st.session_state["filtered_images"]=img_urls
-                                    st.session_state["node_id"]=node_id
+                                    st.session_state[f"filtered_images_{self.app.id}"]=img_urls
+                                    st.session_state[f"node_id_{self.app.id}"]=node_id
                                     self.create_interactive_ui(img_placeholder)
-                                    st.stop()
                                 elif event_type == "execution_success":
                                     data = event['data']
                                     # if pro_btn:
@@ -513,6 +539,9 @@ class Comfyflow:
                                     #     img_placeholder.empty()
 
                                     # st.session_state['preview_prompt_id'] = None
+                                elif event_type == "execution_interrupted":
+                                    data = event['data']
+                                    
                             except Exception as e:
                                 logger.warning(f"get progress exception, {e}")
                                 logger.error(f"Stack trace:\n{traceback.format_exc()}")

@@ -206,6 +206,14 @@ def get_node_input_config(index,input_param, app_input_name, app_input_descripti
                 "name": app_input_name,
                 "help": app_input_description,
             }
+        elif class_type == 'VHS_LoadImages' and param == 'directory':
+            input_config = {
+                "type": "UPLOADIMAGES",
+                "subfolder":param_value,
+                "name": app_input_name,
+                "help": app_input_description,
+                
+            }
         else:
             input_config = {
                 "type": "SELECT",

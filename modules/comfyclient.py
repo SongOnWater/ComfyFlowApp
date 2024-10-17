@@ -146,6 +146,8 @@ class ComfyClient:
                         dispatch_event(queue, {"type": "reverse-image-choose", "data": msg["data"]})
                     elif msg_type == "execution_success":
                         dispatch_event(queue, {"type": "execution_success", "data": msg["data"]})
+                    elif msg_type == "execution_interrupted":
+                        dispatch_event(queue, {"type": "execution_interrupted", "data": msg["data"]})
                     else:
                         logger.warning(f"Unknown message type {msg_type}")
                     
