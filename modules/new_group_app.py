@@ -285,9 +285,10 @@ def gen_group_config(group_Index):
     output_node_id, output_param_0_inputs = get_node_output_config(group_Index,output_param_0)
     app_config['outputs'][output_node_id] = output_param_0_inputs
 
-    interactive_param_0 = st.session_state[f'group_{group_Index}_interactive_param_{0}']
-    interactive_node_id, interactive_param_0_inputs = get_node_interactive_config(group_Index,interactive_param_0)
-    app_config['interactive'][interactive_node_id] = interactive_param_0_inputs
+    interactive_param_0 = st.session_state.get(f'group_{group_Index}_interactive_param_{0}',None)
+    if interactive_param_0:
+        interactive_node_id, interactive_param_0_inputs = get_node_interactive_config(group_Index,interactive_param_0)
+        app_config['interactive'][interactive_node_id] = interactive_param_0_inputs
     return app_config
 def submit_app():
     app_config = gen_app_config()

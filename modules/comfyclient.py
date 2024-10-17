@@ -37,8 +37,8 @@ class ComfyClient:
             raise Exception(f"Failed to get queue from {url}")
         return resp.json()['exec_info']['queue_remaining']
     
-    def queue_prompt(self, prompt):
-        p = {"prompt": prompt, "client_id": self.client_id}
+    def queue_prompt(self, prompt,extra_data):
+        p = {"prompt": prompt, "client_id": self.client_id,"extra_data":extra_data}
         data = json.dumps(p).encode('utf-8')
         logger.info(f"Sending prompt to server, {self.client_id}")
         resp = requests.post(f"{self.server_addr}/prompt", data=data)
@@ -75,13 +75,13 @@ class ComfyClient:
         return resp.json()
     
     
-    def gen_images(self, prompt, queue):
+    def gen_images(self,queue, prompt, extra_data):
         logger.info(f"Generating images from comfyui, {prompt}")
         thread = threading.Thread(target=self._websocket_loop, args=(prompt, queue))
         thread.start()
 
         # queue prompt 
-        prompt_id = self.queue_prompt(prompt)['prompt_id']  
+        prompt_id = self.queue_prompt(prompt,extra_data)['prompt_id']  
         logger.info(f"Send prompt to comfyui, {prompt_id}")
         
         return prompt_id

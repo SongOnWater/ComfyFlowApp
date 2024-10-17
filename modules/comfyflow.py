@@ -112,7 +112,8 @@ class Comfyflow:
             logger.info(f"Sending prompt to server, {prompt}")
             queue = st.session_state.get(f'progress_queue_{self.app.id}', None)
             try:
-                prompt_id = self.comfy_client.gen_images(prompt, queue)
+                extra_pnginfo={'extra_pnginfo':{'workflow': json.loads(self.app.workflow_conf)}}
+                prompt_id = self.comfy_client.gen_images(queue,prompt,extra_pnginfo )
                 st.session_state[f'preview_prompt_id_{self.app.id}'] = prompt_id
                 logger.info(f"generate prompt id: {prompt_id}")
             except Exception as e:
@@ -498,6 +499,7 @@ class Comfyflow:
                                         if type == 'images' and outputs is not None:
                                             st.session_state[f"result_images_{self.app.id}"]=outputs
                                             self.create_result_ui(img_placeholder)
+                                            st.session_state[f'processing_selecte_{self.app.id}'] = False
                                         elif type == 'gifs' and outputs is not None:
                                             for output in outputs:
                                                 img_placeholder.markdown(f'<iframe src="{output}" width="100%" height="360px"></iframe>', unsafe_allow_html=True)
