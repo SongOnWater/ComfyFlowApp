@@ -72,7 +72,7 @@ class ComfyClient:
         resp = requests.get(f"{self.server_addr}/history/{prompt_id}")
         if resp.status_code != 200:
             raise Exception(f"Failed to get history from server, {resp.status_code}")
-        return resp.json()
+        return json.loads(resp.text)
     
     
     def gen_images(self,queue, prompt, extra_data):
@@ -127,7 +127,7 @@ class ComfyClient:
                     elif msg_type == "executing":
                         # Dispatch executing event with msg["data"]["node"]
                         dispatch_event(queue, {"type": "executing", "data": msg["data"]["node"]})
-                        if msg["data"]["node"] is None:
+                        if msg["data"]["node"] is None and self.queue_remaining()==0:
                             logger.info("workflow finished, exiting websocket loop")
                             break
                     elif msg_type == "executed":

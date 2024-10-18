@@ -490,8 +490,8 @@ class Comfyflow:
                                 elif event_type == 'execution_cached':
                                     executed_nodes.extend(event['data']['nodes'])
                                     progress=len(executed_nodes)/node_size
-                                    st.session_state[f"progress_{self.app.id}"]=progress
-                                    output_progress.progress(progress, text="Generate image...")
+                                    #st.session_state[f"progress_{self.app.id}"]=progress
+                                    #output_progress.progress(progress, text="Generate image...")
                                 elif event_type == 'executing':
                                     node = event['data']
                                     if node is None:
@@ -504,17 +504,19 @@ class Comfyflow:
                                             for output in outputs:
                                                 img_placeholder.markdown(f'<iframe src="{output}" width="100%" height="360px"></iframe>', unsafe_allow_html=True)
 
-                                        output_progress.progress(1.0, text="Generate finished")
-                                        logger.info("Generating finished")
-                                        
+                                       
                                         # st.session_state[f'preview_prompt_id_{self.app.id}'] = None
-                                        st.session_state[f'{app_name}_previewed'] = True
-                                        break
+                                        queue_remaining = self.comfy_client.queue_remaining()
+                                        if queue_remaining==0:
+                                            st.session_state[f'{app_name}_previewed'] = True
+                                            output_progress.progress(1.0, text="Generate finished")
+                                            logger.info("Generating finished")
+                                            break
                                     else:
                                         executed_nodes.append(node)
                                         progress=len(executed_nodes)/node_size
-                                        st.session_state[f"progress_{self.app.id}"]=progress
-                                        output_progress.progress(len(executed_nodes)/node_size, text="Generating image...")
+                                        # st.session_state[f"progress_{self.app.id}"]=progress
+                                        # output_progress.progress(len(executed_nodes)/node_size, text="Generating image...")
                                 elif event_type == 'b_preview':
                                     preview_image = event['data']
                                     img_placeholder.image(preview_image, use_column_width=True, caption="Preview")
@@ -536,6 +538,7 @@ class Comfyflow:
                                     self.create_interactive_ui(img_placeholder)
                                 elif event_type == "execution_success":
                                     data = event['data']
+                                    st.session_state[f'preview_prompt_id_{self.app.id}']=data['prompt_id']
                                     # if pro_btn:
                                     #     st.session_state['filtered_images'] = None
                                     #     img_placeholder.empty()
@@ -543,6 +546,7 @@ class Comfyflow:
                                     # st.session_state['preview_prompt_id'] = None
                                 elif event_type == "execution_interrupted":
                                     data = event['data']
+                                    st.session_state[f'preview_prompt_id_{self.app.id}']=None
                                     
                             except Exception as e:
                                 logger.warning(f"get progress exception, {e}")
