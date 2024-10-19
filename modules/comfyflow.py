@@ -127,32 +127,33 @@ class Comfyflow:
             return None
         history = self.comfy_client.get_history(prompt_id)[prompt_id]
         for node_id in self.app_json['outputs']:
-            node_output = history['outputs'][node_id]
-            logger.info(f"Got output from server, {node_id}, {node_output}")
-            if 'images' in node_output:
-                images_output = []
-                for image in node_output['images']:
-                    # image_url = self.comfy_client.get_image_url(image['filename'], image['subfolder'], image['type'])
-                    # images_output.append(image_url)
-                    try:
-                        image_data = self.comfy_client.get_image(image['filename'], image['subfolder'], image['type'])
-                        images_output.append(image_data)
-                    except Exception as e:
-                         logger.info(f"Got images fail, {e}")
-                    
-                logger.info(f"Got images from server, {node_id}, {len(images_output)}")
-                return 'images', images_output
-            elif 'gifs' in node_output:
-                gifs_output = []
-                format = 'gifs'
-                for gif in node_output['gifs']:
-                    if gif['format'] == 'image/gif' or gif['format'] == 'image/webp':
-                        format = 'images'
-                    gif_url = self.comfy_client.get_image_url(gif['filename'], gif['subfolder'], gif['type'])
-                    gifs_output.append(gif_url)
+            if node_id in history['outputs']:
+                node_output = history['outputs'][node_id]
+                logger.info(f"Got output from server, {node_id}, {node_output}")
+                if 'images' in node_output:
+                    images_output = []
+                    for image in node_output['images']:
+                        # image_url = self.comfy_client.get_image_url(image['filename'], image['subfolder'], image['type'])
+                        # images_output.append(image_url)
+                        try:
+                            image_data = self.comfy_client.get_image(image['filename'], image['subfolder'], image['type'])
+                            images_output.append(image_data)
+                        except Exception as e:
+                            logger.info(f"Got images fail, {e}")
+                        
+                    logger.info(f"Got images from server, {node_id}, {len(images_output)}")
+                    return 'images', images_output
+                elif 'gifs' in node_output:
+                    gifs_output = []
+                    format = 'gifs'
+                    for gif in node_output['gifs']:
+                        if gif['format'] == 'image/gif' or gif['format'] == 'image/webp':
+                            format = 'images'
+                        gif_url = self.comfy_client.get_image_url(gif['filename'], gif['subfolder'], gif['type'])
+                        gifs_output.append(gif_url)
 
-                logger.info(f"Got gifs from server, {node_id}, {len(gifs_output)}")
-                return format, gifs_output
+                    logger.info(f"Got gifs from server, {node_id}, {len(gifs_output)}")
+                    return format, gifs_output
         
     def create_ui_input(self, node_id, node_inputs):
         def random_seed(param_key):
@@ -481,17 +482,22 @@ class Comfyflow:
                                 progress_queue = st.session_state.get(f'progress_queue_{self.app.id}')
                                 event = progress_queue.get()
                                 logger.info(f"event: {event}")
-
+                                queue_remaining = self.comfy_client.queue_remaining()
                                 event_type = event['type']
                                 if event_type == 'status':
                                     remaining = event['data']['exec_info']['queue_remaining']
-                                    #st.session_state["remaining"]=remaining
+                                    st.session_state["remaining"]=remaining
                                     output_queue_remaining.text(f"Queue: {remaining}")
                                 elif event_type == 'execution_cached':
-                                    executed_nodes.extend(event['data']['nodes'])
+
+                                    execution_cached_nodes=event['data']['nodes']
+                                    executed_nodes.extend(execution_cached_nodes)
+                                    if queue_remaining>0:
+                                        node_size+=len(execution_cached_nodes)
+
                                     progress=len(executed_nodes)/node_size
-                                    #st.session_state[f"progress_{self.app.id}"]=progress
-                                    #output_progress.progress(progress, text="Generate image...")
+                                    st.session_state[f"progress_{self.app.id}"]=progress
+                                    output_progress.progress(progress, text="Generate image...")
                                 elif event_type == 'executing':
                                     node = event['data']
                                     if node is None:
@@ -506,7 +512,7 @@ class Comfyflow:
 
                                        
                                         # st.session_state[f'preview_prompt_id_{self.app.id}'] = None
-                                        queue_remaining = self.comfy_client.queue_remaining()
+                                        
                                         if queue_remaining==0:
                                             st.session_state[f'{app_name}_previewed'] = True
                                             output_progress.progress(1.0, text="Generate finished")
@@ -514,9 +520,11 @@ class Comfyflow:
                                             break
                                     else:
                                         executed_nodes.append(node)
+                                        if queue_remaining>0:
+                                            node_size+=len(node)
                                         progress=len(executed_nodes)/node_size
-                                        # st.session_state[f"progress_{self.app.id}"]=progress
-                                        # output_progress.progress(len(executed_nodes)/node_size, text="Generating image...")
+                                        st.session_state[f"progress_{self.app.id}"]=progress
+                                        output_progress.progress(progress, text="Generating image...")
                                 elif event_type == 'b_preview':
                                     preview_image = event['data']
                                     img_placeholder.image(preview_image, use_column_width=True, caption="Preview")

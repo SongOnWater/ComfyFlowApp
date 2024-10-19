@@ -386,11 +386,11 @@ def save_group(group_index,id):
         # app['username'] = st.session_state['username']
         get_group_app_model().edit_app(id,name,description,app_conf)
 
-        logger.info(f"Save app successfully, {app_config['name']}")
+        logger.info(f"Save group successfully, {name}")
         st.session_state[f'create_save_group_info_{group_index}'] = "success"
 
     else:
-        logger.info(f"submit app error, {app_config['name']}")
+        logger.info(f"Save group error, {name}")
         st.session_state[f'create_save_group_info_{group_index}'] = "error"        
 def save_app(app):
     app_config = gen_app_config()
@@ -679,7 +679,7 @@ def new_group_app_ui():
     if  'create_submit_info' in st.session_state and st.session_state['create_submit_info'] == 'success':
         new_group_app_inputs_ui()
 
-def edit_group_app_inputs_ui(app,workflow_groups):
+def edit_group_app_inputs_ui(workflow_groups):
     if workflow_groups:
         for group_index,group in enumerate(workflow_groups):
                 group_name = group["name"] 
@@ -763,7 +763,7 @@ def edit_group_app_inputs_ui(app,workflow_groups):
                                                         type="primary",
                                                         use_container_width=True, 
                                                         help="Submit group params",
-                                                        on_click=lambda idx=group_index: save_group(idx,app.id))     
+                                                        on_click=lambda idx=group_index,id=group.id: save_group(idx,id))     
                     if submit_button:
                         submit_info = st.session_state.get(f'create_save_group_info_{group_index}')
                         if submit_info == 'success':
@@ -848,6 +848,6 @@ def edit_group_app_ui(app):
         if 'create_workflow_groups' in st.session_state and st.session_state['create_workflow_groups']:
              new_group_app_inputs_ui()
         else:
-            edit_group_app_inputs_ui(app,workflow_groups)
+            edit_group_app_inputs_ui(workflow_groups)
          
     

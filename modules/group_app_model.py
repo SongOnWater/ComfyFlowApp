@@ -2,6 +2,7 @@ from loguru import logger
 import streamlit as st
 from sqlalchemy import text
 from modules import AppStatus
+from sqlalchemy.exc import SQLAlchemyError
 
 """
 comfyflow_apps table
@@ -107,8 +108,15 @@ class GroupAppModel:
             logger.info(f"update app conf: {id} {name} {description} {app_conf}")
             
             sql = text(f'UPDATE {self.app_talbe_name} SET name=:name, description=:description, app_conf=:app_conf, updated_at=datetime("now") WHERE id=:id;')
-            s.execute(sql, dict(id=id, name=name, description=description, app_conf=app_conf))
+            result = s.execute(sql, dict(id=id, name=name, description=description, app_conf=app_conf))
             s.commit()
+            
+            if result.rowcount > 0:
+                logger.info(f"Update successful. Rows affected: {result.rowcount}")
+                return True
+            else:
+                logger.warning(f"Update operation didn't affect any rows. ID might not exist: {id}")
+                return False
 
     def update_app_preview(self, name):
         # update preview_image

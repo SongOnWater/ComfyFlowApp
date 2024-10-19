@@ -72,6 +72,7 @@ class ComfyClient:
         resp = requests.get(f"{self.server_addr}/history/{prompt_id}")
         if resp.status_code != 200:
             raise Exception(f"Failed to get history from server, {resp.status_code}")
+        #logger.info(f"Got history from server, {resp.text}")
         return json.loads(resp.text)
     
     
