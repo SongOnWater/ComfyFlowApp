@@ -483,6 +483,7 @@ class Comfyflow:
                                 event = progress_queue.get()
                                 logger.info(f"event: {event}")
                                 queue_remaining = self.comfy_client.queue_remaining()
+                                output_queue_remaining.text(f"Queue: {queue_remaining}")
                                 event_type = event['type']
                                 if event_type == 'status':
                                     remaining = event['data']['exec_info']['queue_remaining']
