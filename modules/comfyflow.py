@@ -34,6 +34,13 @@ class Comfyflow:
   
 
     def generate(self):
+         
+        st.session_state[f"result_images_{self.app.id}"]= None
+        # st.session_state[f'preview_prompt_id_{self.app.id}']=None
+        st.session_state.pop(f'app_{self.app.id}_select_states',None)
+        st.session_state.pop(f'app_{self.app.id}_repeat_values',None)
+
+
         prompt = copy.deepcopy(self.api_json)
         if prompt is not None:
             # update seed and noise_seed for random, if not set
@@ -110,7 +117,7 @@ class Comfyflow:
                                 return
                             
             logger.info(f"Sending prompt to server, {prompt}")
-            queue = st.session_state.get(f'progress_queue_{self.app.id}', None)
+            queue = st.session_state.get(f'progress_queue_{self.app.id}', None) 
             try:
                 extra_pnginfo={'extra_pnginfo':{'workflow': json.loads(self.app.workflow_conf)}}
                 prompt_id = self.comfy_client.gen_images(queue,prompt,extra_pnginfo )
@@ -517,6 +524,7 @@ class Comfyflow:
                                         if queue_remaining==0:
                                             st.session_state[f'{app_name}_previewed'] = True
                                             output_progress.progress(1.0, text="Generate finished")
+                                            st.session_state[f"progress_{self.app.id}"]=1.0
                                             logger.info("Generating finished")
                                             break
                                     else:
